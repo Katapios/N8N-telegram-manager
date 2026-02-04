@@ -1,7 +1,8 @@
 http:
   routers:
     n8n-router:
-      rule: "Host(`llm.ognivo.spb.ru`)"
+      # ВАЖНО: замените на ваш домен из N8N_HOST (.env)
+      rule: "Host(`n8n.your-domain.com`)"
       entryPoints:
         - "websecure"
       service: "n8n-service"

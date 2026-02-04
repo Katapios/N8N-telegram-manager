@@ -66,14 +66,19 @@ services:
     restart: unless-stopped
     volumes:
       - ./ollama/data:/root/.ollama
+    environment:
+      # Рекомендуемая компактная модель для слабого ноутбука.
+      # Перед первым запуском внутри контейнера выполните:
+      #   ollama pull llama3.2:3b
+      - OLLAMA_MODEL=llama3.2:3b
     networks:
       - ai-agent-net
     tty: true
     deploy:
       resources:
         limits:
-          cpus: '2.0' # Can be higher if available
-          memory: '6G'  # Adjust based on the model. 6G is safe for a 8B q4 model.
+          cpus: '1.5' # Оптимально для слабого ноутбука
+          memory: '4G'  # Достаточно для llama3.2:3b / 8B q4 на 16ГБ RAM
 
   chroma:
     image: chromadb/chroma

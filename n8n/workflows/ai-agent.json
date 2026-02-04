@@ -1,185 +1,203 @@
 {
-  "name": "Local AI Agent",
+  "name": "Local AI Agent (HTTP-based)",
   "nodes": [
     {
       "parameters": {
-        "path": "0e6359a4-9694-4b45-83f8-62b1e1919865",
-        "responseMode": "lastNode",
+        "path": "telegram-ai-agent",
+        "responseMode": "onReceived",
         "options": {}
       },
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [
-        -260,
+        -520,
         300
       ],
-      "webhookId": "0e6359a4-9694-4b45-83f8-62b1e1919865"
+      "webhookId": "telegram-ai-agent"
     },
     {
       "parameters": {
-        "chatId": "={{ $json.body.message.chat.id }}",
-        "text": "Thinking...",
-        "options": {}
+        "functionCode": "const body = $json.body || {};\nconst message = body.message || {};\nconst chat = message.chat || {};\nconst text = message.text || '';\n\nconst isWebSearch = text.startsWith('/search ');\n\nreturn [{\n  chatId: chat.id,\n  originalText: text,\n  isWebSearch,\n  query: isWebSearch ? text.replace('/search ', '') : text\n}];"
       },
-      "name": "Telegram Send Message",
-      "type": "n8n-nodes-base.telegram",
+      "name": "Parse Telegram",
+      "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        -60,
-        300
-      ],
-      "credentials": {
-        "telegramApi": {
-          "id": "TELEGRAM_CREDENTIALS_ID",
-          "name": "Telegram"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "collectionName": "ai_memory",
-        "operation": "search",
-        "query": "{{ $json.body.message.text }}",
-        "limit": 3,
-        "options": {}
-      },
-      "name": "Chroma (Search)",
-      "type": "n8n-nodes-base.chroma",
-      "typeVersion": 1,
-      "position": [
-        140,
-        180
-      ],
-      "credentials": {
-        "chromaApi": {
-          "id": "CHROMA_CREDENTIALS_ID",
-          "name": "Chroma"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "prompt": "Context: {{ $json.context }}\n\nUser Question: {{ $json.question }}\n\nAnswer:",
-        "model": "llama3",
-        "options": {}
-      },
-      "name": "Ollama",
-      "type": "n8n-nodes-base.ollama",
-      "typeVersion": 1,
-      "position": [
-        540,
-        300
-      ],
-      "credentials": {
-        "ollamaApi": {
-          "id": "OLLAMA_CREDENTIALS_ID",
-          "name": "Ollama"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $json.body.message.chat.id }}",
-        "text": "={{ $json.answer }}",
-        "options": {}
-      },
-      "name": "Telegram Send Final Answer",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1,
-      "position": [
-        740,
-        300
-      ],
-      "credentials": {
-        "telegramApi": {
-          "id": "TELEGRAM_CREDENTIALS_ID",
-          "name": "Telegram"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "collectionName": "ai_memory",
-        "operation": "upsert",
-        "text": "{{ $json.body.message.text }}",
-        "options": {}
-      },
-      "name": "Chroma (Save)",
-      "type": "n8n-nodes-base.chroma",
-      "typeVersion": 1,
-      "position": [
-        140,
-        420
-      ],
-      "credentials": {
-        "chromaApi": {
-          "id": "CHROMA_CREDENTIALS_ID",
-          "name": "Chroma"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "keepOnly": "set",
-        "values": {
-          "string": [
-            {
-              "name": "question",
-              "value": "={{ $json.body.message.text }}"
-            },
-            {
-              "name": "context",
-              "value": "={{ $items('Chroma (Search)').map(item => item.json.text).join('\n') }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "name": "Set Context",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 1,
-      "position": [
-        340,
+        -300,
         300
       ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "Thinking...",
+        "additionalFields": {}
+      },
+      "name": "Telegram Typing",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        -90,
+        140
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIALS_ID",
+          "name": "Telegram"
+        }
+      }
     },
     {
       "parameters": {
         "conditions": {
+          "boolean": [],
           "string": [
             {
-              "value1": "={{ $json.body.message.text }}",
-              "operation": "contains",
-              "value2": "/search"
+              "value1": "={{ $json.isWebSearch }}",
+              "operation": "equal",
+              "value2": "true"
             }
           ]
         }
       },
-      "name": "If search command",
+      "name": "If Web Search",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        -60,
-        500
+        -90,
+        420
       ]
     },
     {
       "parameters": {
-        "query": "={{ $json.body.message.text.replace('/search ', '') }}",
-        "options": {}
+        "requestMethod": "POST",
+        "url": "http://chroma:8000/api/v1/collections/ai_memory/query",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"query_texts\": [ $json.query ],\n  \"n_results\": 5\n}"
       },
-      "name": "Tavily Search",
-      "type": "n8n-nodes-base.tavily",
+      "name": "Chroma Query",
+      "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
       "position": [
         140,
-        600
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const results = $json.documents || [];\nlet context = '';\nif (Array.isArray(results) && results.length > 0) {\n  const docs = results[0];\n  if (Array.isArray(docs)) {\n    context = docs.join('\\n');\n  }\n}\n\nreturn [{\n  chatId: $json.chatId || $prevNode.json.chatId,\n  originalText: $json.originalText || $prevNode.json.originalText,\n  query: $json.query || $prevNode.json.query,\n  isWebSearch: $json.isWebSearch || false,\n  memoryContext: context\n}];"
+      },
+      "name": "Build RAG Context",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        360,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "https://api.tavily.com/search",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"api_key\": $env.TAVILY_API_KEY,\n  \"query\": $json.query,\n  \"search_depth\": \"basic\",\n  \"include_answer\": true\n}"
+      },
+      "name": "Tavily Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        140,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "let webContext = '';\nif ($json.answer) {\n  webContext = $json.answer;\n} else if (Array.isArray($json.results)) {\n  webContext = $json.results.map(r => `${r.title}\\n${r.content}`).join('\\n\\n');\n}\n\nreturn [{\n  chatId: $prevNode.json.chatId,\n  originalText: $prevNode.json.originalText,\n  query: $prevNode.json.query,\n  memoryContext: $prevNode.json.memoryContext || '',\n  webContext\n}];"
+      },
+      "name": "Build Web Context",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        360,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const system = 'You are a helpful Russian-speaking AI assistant working over Telegram. Be concise.';\n\nconst parts = [];\nif ($json.memoryContext) {\n  parts.push('Memory context:\\n' + $json.memoryContext);\n}\nif ($json.webContext) {\n  parts.push('Web search context:\\n' + $json.webContext);\n}\nconst context = parts.join('\\n\\n');\n\nlet content = '';\nif (context) {\n  content = `${context}\\n\\nUser: ${$json.query}\\nAssistant:`;\n} else {\n  content = `User: ${$json.query}\\nAssistant:`;\n}\n\nreturn [{\n  chatId: $json.chatId,\n  prompt: content,\n  system\n}];"
+      },
+      "name": "Build Prompt",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        580,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "http://ollama:11434/api/chat",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"model\": $env.OLLAMA_MODEL || \"llama3.2:3b\",\n  \"stream\": false,\n  \"messages\": [\n    {\"role\": \"system\", \"content\": $json.system},\n    {\"role\": \"user\", \"content\": $json.prompt}\n  ]\n}"
+      },
+      "name": "Ollama Chat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        800,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const resp = $json;\nlet answer = '';\nif (resp.message && resp.message.content) {\n  answer = resp.message.content;\n}\n\nreturn [{\n  chatId: $prevNode.json.chatId,\n  answer,\n  question: $prevNode.json.prompt\n}];"
+      },
+      "name": "Extract Answer",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1020,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "http://chroma:8000/api/v1/collections/ai_memory/upsert",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"ids\": [ Date.now().toString() ],\n  \"documents\": [ $json.question + \"\\n\\n\" + $json.answer ],\n  \"metadatas\": [ { \"source\": \"telegram\" } ]\n}"
+      },
+      "name": "Chroma Upsert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1240,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.answer }}",
+        "additionalFields": {}
+      },
+      "name": "Telegram Send Answer",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1240,
+        460
       ],
       "credentials": {
-        "tavilyApi": {
-          "id": "TAVILY_CREDENTIALS_ID",
-          "name": "Tavily"
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIALS_ID",
+          "name": "Telegram"
         }
       }
     }
@@ -189,63 +207,35 @@
       "main": [
         [
           {
-            "node": "Telegram Send Message",
+            "node": "Parse Telegram",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Telegram Send Message": {
+    "Parse Telegram": {
       "main": [
         [
           {
-            "node": "Chroma (Search)",
+            "node": "Telegram Typing",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Chroma (Save)",
+            "node": "If Web Search",
             "type": "main",
             "index": 0
-          }
-        ]
-      ]
-    },
-    "Chroma (Search)": {
-      "main": [
-        [
+          },
           {
-            "node": "Set Context",
+            "node": "Chroma Query",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Set Context": {
-      "main": [
-        [
-          {
-            "node": "Ollama",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Ollama": {
-      "main": [
-        [
-          {
-            "node": "Telegram Send Final Answer",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "If search command": {
+    "If Web Search": {
       "main": [
         [
           {
@@ -257,11 +247,82 @@
         []
       ]
     },
+    "Chroma Query": {
+      "main": [
+        [
+          {
+            "node": "Build RAG Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Tavily Search": {
       "main": [
         [
           {
-            "node": "Set Context",
+            "node": "Build Web Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build RAG Context": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Web Context": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [
+          {
+            "node": "Ollama Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat": {
+      "main": [
+        [
+          {
+            "node": "Extract Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Answer": {
+      "main": [
+        [
+          {
+            "node": "Chroma Upsert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Telegram Send Answer",
             "type": "main",
             "index": 0
           }
