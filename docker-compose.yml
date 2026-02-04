@@ -70,9 +70,6 @@ services:
         limits:
           cpus: '2.0' # Can be higher if available
           memory: '6G'  # Adjust based on the model. 6G is safe for a 8B q4 model.
-        reservations:
-          # Uncomment and configure if you have a GPU
-          # capabilities: [gpu]
 
   chroma:
     image: chromadb/chroma
