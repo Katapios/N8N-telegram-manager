@@ -1,74 +1,111 @@
-# AI Agent on n8n + Ollama
+# Локальный AI-агент с n8n, Ollama и RAG
 
-This project provides a complete, self-hosted AI agent that runs on a low-resource machine.
+Этот проект представляет собой полностью автономного AI-агента, которого вы можете запустить на собственном оборудовании. Он использует n8n для оркестрации, Ollama для работы с локальной LLM, ChromaDB для долговременной памяти (RAG) и Tavily для поиска в интернете. Агент доступен через Telegram-бота.
 
-## Architecture
-- **Orchestration**: n8n
-- **LLM**: Ollama
-- **Memory (RAG)**: ChromaDB
-- **Web Search**: Tavily
-- **Interface**: Telegram
-- **Networking**: Traefik for SSL
+## Возможности
 
-## Prerequisites
-- Docker & Docker Compose
-- A domain name
-- An external IP address
-- Ports 80 and 443 forwarded from your router to the machine running Docker.
+- **Локализация:** Ваши данные остаются на вашей машине. Нет зависимости от облачных LLM.
+- **Долговременная память:** Агент помнит прошлые разговоры, используя RAG-пайплайн с ChromaDB.
+- **Поиск в интернете:** Агент может искать информацию в интернете с помощью Tavily для ответов на актуальные вопросы.
+- **Простое развертывание:** Весь стек описан в одном файле `docker-compose.yml`.
+- **Безопасность:** Вебхук n8n доступен по HTTPS с использованием Traefik и Let's Encrypt.
+- **Оптимизация для слабых систем:** Проект разработан для запуска на ноутбуке с ограниченными ресурсами CPU и RAM.
 
-## Step-by-Step Launch
+## Архитектура
 
-1.  **Clone the repository:**
+```
++----------------+      +----------------+      +-----------------+      +-----------------+
+|                |      |                |      |                 |      |                 |
+|  Telegram-бот  |----->|  n8n Workflow  |----->|  Ollama (LLM)   |      |  Поиск Tavily   |
+|                |      |                |      |                 |      |                 |
++----------------+      +-------+--------+      +-----------------+      +--------+--------+
+                              |                                                |
+                              |                                                |
+                              v                                                |
+                      +-------+--------+                                       |
+                      |                |                                       |
+                      |  Chroma (RAG)  |<--------------------------------------+
+                      |                |
+                      +----------------+
+```
+
+## Требования
+
+- Установленные Docker и Docker Compose
+- Доменное имя
+- Публичный (белый) IP-адрес
+
+## Установка
+
+1.  **Клонируйте репозиторий:**
     ```bash
-    git clone <your-repo-url>
-    cd N8N-telegram-manager
+    git clone <URL-репозитория>
+    cd <имя-репозитория>
     ```
 
-2.  **Configure Environment:**
-    Copy the example `.env` file and fill in your actual data.
-    ```bash
-    cp .env.example .env
-    ```
-    - `N8N_HOST`: Your domain for n8n (e.g., `n8n.example.com`).
-    - `N8N_ENCRYPTION_KEY`: A long, random string to secure credentials.
-    - `TELEGRAM_TOKEN`: Your Telegram bot token from BotFather.
-    - `TAVILY_API_KEY`: Your API key from Tavily.
-    - `ACME_EMAIL`: Your email for Let's Encrypt notifications.
+2.  **Настройте ваше окружение:**
+    - Скопируйте файл `.env.example` в `.env`:
+      ```bash
+      cp .env.example .env
+      ```
+    - Отредактируйте файл `.env` и заполните следующие значения:
+      - `N8N_HOST`: Ваше доменное имя для n8n (например, `n8n.your-domain.com`).
+      - `N8N_ENCRYPTION_KEY`: Длинная, случайная строка для шифрования учетных данных в n8n.
+      - `WEBHOOK_URL`: Полный URL вашего инстанса n8n (например, `https://n8n.your-domain.com`).
+      - `GENERIC_TIMEZONE`: Ваш часовой пояс (например, `Europe/Moscow`).
+      - `TELEGRAM_TOKEN`: Токен вашего Telegram-бота.
+      - `TAVILY_API_KEY`: Ваш API-ключ от Tavily.
+      - `ACME_EMAIL`: Ваш email для получения уведомлений от Let's Encrypt.
 
-3.  **DNS Setup:**
-    Create an `A` record in your DNS provider settings pointing your `N8N_HOST` domain to your external IP address.
+3.  **Настройте DNS:**
+    - В настройках вашего домена создайте **A-запись**, которая будет указывать с вашего `N8N_HOST` на публичный IP-адрес вашего сервера.
 
-4.  **Run Docker Compose:**
+4.  **Запустите сервисы:**
     ```bash
     docker-compose up -d
     ```
-    This will start all services. Ollama will start downloading the LLM model, which may take some time.
 
-5.  **Configure n8n:**
-    - Open `https://<your-n8n-domain>` in your browser and set up an owner account.
-    - Go to **Workflows** and import `n8n/workflows/ai-agent.json`.
-    - Go to **Credentials** and add credentials for:
-      - **Telegram**: Use your bot token.
-      - **Ollama**:
-        - Base URL: `http://ollama:11434`
-      - **Chroma**:
-        - Base URL: `http://chroma:8000`
-      - **Tavily**:
-        - API Key: Your Tavily API Key.
-    - Open the imported workflow, connect the correct credentials to the nodes, and **Activate** the workflow.
+5.  **Настройте n8n:**
+    - Откройте n8n в вашем браузере (например, `https://n8n.your-domain.com`).
+    - Создайте новый workflow и импортируйте файл `n8n/workflows/ai-agent.json`.
+    - В импортированном workflow вам нужно настроить учетные данные (credentials) для Telegram, Chroma, Ollama и Tavily.
+      - **Telegram:** Создайте новые "Telegram" credentials и введите токен вашего бота.
+      - **Chroma:** Создайте новые "Chroma" credentials. URL должен быть `http://chroma:8000`.
+      - **Ollama:** Создайте новые "Ollama" credentials. URL должен быть `http://ollama:11434`.
+      - **Tavily:** Создайте новые "Tavily" credentials и введите ваш API-ключ от Tavily.
+    - Активируйте workflow (переключатель "Active" вверху справа).
 
-6.  **Talk to your Bot:**
-    You can now interact with your AI agent via Telegram.
+6.  **Установите вебхук для Telegram:**
+    - В workflow n8n скопируйте URL из узла "Webhook".
+    - Отправьте POST-запрос к Telegram API, чтобы установить вебхук для вашего бота. Это можно сделать с помощью `curl`:
+      ```bash
+      curl -F "url=<URL-вашего-n8n-вебхука>" https://api.telegram.org/bot<токен-вашего-бота>/setWebhook
+      ```
 
-## Debugging
-- Check logs for a specific service:
+7.  **Начинайте общаться с вашим AI-агентом!**
+
+## Отладка
+
+- **Просмотр логов контейнера:**
   ```bash
-  docker-compose logs -f n8n
-  docker-compose logs -f ollama
+  docker-compose logs -f <имя-сервиса>
   ```
-- The n8n UI provides detailed information about each workflow execution under **Executions**.
+  (например, `docker-compose logs -f n8n`)
 
-## Common Issues
-- **502 Bad Gateway**: n8n is likely still starting up or has crashed. Check `docker-compose logs -f n8n`.
-- **SSL Certificate not working**: Ensure ports 80/443 are correctly forwarded and your DNS `A` record has propagated.
-- **Ollama errors in n8n**: The `ollama` service might be down or still pulling the model. Check its logs.
+- **Мониторинг использования ресурсов:**
+  ```bash
+  docker stats
+  ```
+
+- **Панель управления Traefik:**
+  - Откройте `http://<IP-вашего-сервера>:8080` в браузере, чтобы увидеть панель управления Traefik.
+
+## Типичные ошибки
+
+- **"502 Bad Gateway":** Обычно это означает, что контейнер n8n не запущен или недоступен для Traefik. Проверьте логи обоих контейнеров.
+- **"404 Not Found":** Может означать, что URL вебхука указан неверно или workflow не активирован.
+- **Ошибки Ollama:** Если у вас проблемы с Ollama, вы можете попробовать запустить его в режиме отладки, добавив переменную окружения `OLLAMA_DEBUG=1` в `docker-compose.yml`.
+
+## Как добавлять новые узлы
+
+Workflow в n8n спроектирован как модульный. Вы можете легко добавлять новую функциональность, добавляя новые узлы в цепочку. Например, вы можете добавить узел для отправки email или взаимодействия с другим API.

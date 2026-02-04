@@ -1,209 +1,251 @@
 {
-  "name": "AI Agent Workflow",
+  "name": "Local AI Agent",
   "nodes": [
     {
       "parameters": {
-        "path": "d47a83hs92jsd2",
+        "path": "0e6359a4-9694-4b45-83f8-62b1e1919865",
+        "responseMode": "lastNode",
         "options": {}
       },
-      "name": "Telegram Webhook",
+      "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [
-        400,
+        -260,
         300
       ],
-      "webhookId": "d47a83hs92jsd2"
+      "webhookId": "0e6359a4-9694-4b45-83f8-62b1e1919865"
     },
     {
       "parameters": {
+        "chatId": "={{ $json.body.message.chat.id }}",
+        "text": "Thinking...",
+        "options": {}
+      },
+      "name": "Telegram Send Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIALS_ID",
+          "name": "Telegram"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "collectionName": "ai_memory",
+        "operation": "search",
+        "query": "{{ $json.body.message.text }}",
+        "limit": 3,
+        "options": {}
+      },
+      "name": "Chroma (Search)",
+      "type": "n8n-nodes-base.chroma",
+      "typeVersion": 1,
+      "position": [
+        140,
+        180
+      ],
+      "credentials": {
+        "chromaApi": {
+          "id": "CHROMA_CREDENTIALS_ID",
+          "name": "Chroma"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "prompt": "Context: {{ $json.context }}\n\nUser Question: {{ $json.question }}\n\nAnswer:",
+        "model": "llama3",
+        "options": {}
+      },
+      "name": "Ollama",
+      "type": "n8n-nodes-base.ollama",
+      "typeVersion": 1,
+      "position": [
+        540,
+        300
+      ],
+      "credentials": {
+        "ollamaApi": {
+          "id": "OLLAMA_CREDENTIALS_ID",
+          "name": "Ollama"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.body.message.chat.id }}",
+        "text": "={{ $json.answer }}",
+        "options": {}
+      },
+      "name": "Telegram Send Final Answer",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        740,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIALS_ID",
+          "name": "Telegram"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "collectionName": "ai_memory",
+        "operation": "upsert",
+        "text": "{{ $json.body.message.text }}",
+        "options": {}
+      },
+      "name": "Chroma (Save)",
+      "type": "n8n-nodes-base.chroma",
+      "typeVersion": 1,
+      "position": [
+        140,
+        420
+      ],
+      "credentials": {
+        "chromaApi": {
+          "id": "CHROMA_CREDENTIALS_ID",
+          "name": "Chroma"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "keepOnly": "set",
         "values": {
           "string": [
             {
-              "name": "userMessage",
-              "value": "={{$json.body.message.text}}"
+              "name": "question",
+              "value": "={{ $json.body.message.text }}"
             },
             {
-              "name": "chatId",
-              "value": "={{$json.body.message.chat.id}}"
+              "name": "context",
+              "value": "={{ $items('Chroma (Search)').map(item => item.json.text).join('\n') }}"
             }
           ]
         },
         "options": {}
       },
-      "name": "Extract Info",
+      "name": "Set Context",
       "type": "n8n-nodes-base.set",
       "typeVersion": 1,
       "position": [
-        620,
+        340,
         300
       ]
-    },
-    {
-      "parameters": {
-        "operation": "getSimilar",
-        "collection": "conversations",
-        "query": "={{$node[\"Extract Info\"].json.userMessage}}",
-        "limit": 3
-      },
-      "name": "Retrieve Memory",
-      "type": "n8n-nodes-base.chroma",
-      "typeVersion": 1,
-      "position": [
-        840,
-        300
-      ],
-      "credentials": {
-        "chroma": "Chroma"
-      }
     },
     {
       "parameters": {
         "conditions": {
           "string": [
             {
-              "value1": "={{$node[\"Extract Info\"].json.userMessage.toLowerCase()}}",
+              "value1": "={{ $json.body.message.text }}",
               "operation": "contains",
-              "value2": "search for"
-            },
-            {
-              "value1": "={{$node[\"Extract Info\"].json.userMessage.toLowerCase()}}",
-              "operation": "contains",
-              "value2": "найди"
+              "value2": "/search"
             }
           ]
         }
       },
-      "name": "Is Search Needed?",
+      "name": "If search command",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        1060,
-        400
+        -60,
+        500
       ]
     },
     {
       "parameters": {
-        "query": "={{$node[\"Extract Info\"].json.userMessage}}",
+        "query": "={{ $json.body.message.text.replace('/search ', '') }}",
         "options": {}
       },
       "name": "Tavily Search",
       "type": "n8n-nodes-base.tavily",
       "typeVersion": 1,
       "position": [
-        1280,
-        300
+        140,
+        600
       ],
       "credentials": {
-        "tavily": "Tavily"
-      }
-    },
-    {
-      "parameters": {
-        "keep": "all",
-        "inputs": [
-          {
-            "input1": "={{$node[\"Retrieve Memory\"].json}}",
-            "input2": "={{$node[\"Tavily Search\"].json}}"
-          }
-        ]
-      },
-      "name": "Merge Context",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 2,
-      "position": [
-        1500,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "prompt": "You are a helpful AI assistant. Use the following context to answer the user's question. If you don't know the answer, just say that you don't know, don't try to make something up.\n\nContext from memory:\n{{$node[\"Retrieve Memory\"].json.documents}}\n\nContext from web search:\n{{$node[\"Tavily Search\"].json.results}}\n\nUser Question: {{$node[\"Extract Info\"].json.userMessage}}",
-        "model": "llama3:8b-instruct-q4_K_M",
-        "stream": false,
-        "options": {}
-      },
-      "name": "Ollama Call",
-      "type": "n8n-nodes-base.ollama",
-      "typeVersion": 1,
-      "position": [
-        1720,
-        300
-      ],
-      "credentials": {
-        "ollama": "Ollama"
-      }
-    },
-    {
-      "parameters": {
-        "chatId": "={{$node[\"Extract Info\"].json.chatId}}",
-        "text": "={{$node[\"Ollama Call\"].json.response}}",
-        "options": {}
-      },
-      "name": "Send to Telegram",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1,
-      "position": [
-        2160,
-        300
-      ],
-      "credentials": {
-        "telegram": "Telegram"
-      }
-    },
-    {
-      "parameters": {
-        "operation": "add",
-        "collection": "conversations",
-        "documents": "User: {{$node[\"Extract Info\"].json.userMessage}}\nAI: {{$node[\"Ollama Call\"].json.response}}"
-      },
-      "name": "Save Memory",
-      "type": "n8n-nodes-base.chroma",
-      "typeVersion": 1,
-      "position": [
-        1940,
-        300
-      ],
-      "credentials": {
-        "chroma": "Chroma"
+        "tavilyApi": {
+          "id": "TAVILY_CREDENTIALS_ID",
+          "name": "Tavily"
+        }
       }
     }
   ],
   "connections": {
-    "Telegram Webhook": {
+    "Webhook": {
       "main": [
         [
           {
-            "node": "Extract Info",
+            "node": "Telegram Send Message",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Extract Info": {
+    "Telegram Send Message": {
       "main": [
         [
           {
-            "node": "Retrieve Memory",
+            "node": "Chroma (Search)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Chroma (Save)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Retrieve Memory": {
+    "Chroma (Search)": {
       "main": [
         [
           {
-            "node": "Is Search Needed?",
+            "node": "Set Context",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Is Search Needed?": {
+    "Set Context": {
+      "main": [
+        [
+          {
+            "node": "Ollama",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama": {
+      "main": [
+        [
+          {
+            "node": "Telegram Send Final Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If search command": {
       "main": [
         [
           {
@@ -212,53 +254,14 @@
             "index": 0
           }
         ],
-        [
-          {
-            "node": "Merge Context",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "Tavily Search": {
       "main": [
         [
           {
-            "node": "Merge Context",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Merge Context": {
-      "main": [
-        [
-          {
-            "node": "Ollama Call",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Ollama Call": {
-      "main": [
-        [
-          {
-            "node": "Save Memory",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Save Memory": {
-      "main": [
-        [
-          {
-            "node": "Send to Telegram",
+            "node": "Set Context",
             "type": "main",
             "index": 0
           }
@@ -266,7 +269,5 @@
       ]
     }
   },
-  "active": false,
-  "settings": {},
-  "id": "1"
+  "pinData": {}
 }
