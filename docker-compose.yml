@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: "traefik:v2.10"
+    container_name: "traefik"
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./reverse-proxy/letsencrypt:/letsencrypt"
+    networks:
+      - ai-agent-net
+
+  n8n:
+    image: n8nio/n8n
+    container_name: n8n
+    restart: unless-stopped
+    environment:
+      - N8N_HOST=${N8N_HOST}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
+    volumes:
+      - ./n8n/data:/home/node/.n8n
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.n8n.rule=Host(`${N8N_HOST}`)"
+      - "traefik.http.routers.n8n.entrypoints=websecure"
+      - "traefik.http.routers.n8n.tls.certresolver=letsencrypt"
+      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+    depends_on:
+      - ollama
+      - chroma
+    networks:
+      - ai-agent-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5678"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: '1.5G'
+
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    restart: unless-stopped
+    volumes:
+      - ./ollama/data:/root/.ollama
+    networks:
+      - ai-agent-net
+    tty: true
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0' # Can be higher if available
+          memory: '6G'  # Adjust based on the model. 6G is safe for a 8B q4 model.
+        reservations:
+          # Uncomment and configure if you have a GPU
+          # capabilities: [gpu]
+
+  chroma:
+    image: chromadb/chroma
+    container_name: chroma
+    restart: unless-stopped
+    volumes:
+      - ./vector-store/data:/chroma/chroma
+    networks:
+      - ai-agent-net
+    ports: # Exposing is optional, useful for local debugging
+      - "8000:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: '512M'
+
+networks:
+  ai-agent-net:
+    driver: bridge
