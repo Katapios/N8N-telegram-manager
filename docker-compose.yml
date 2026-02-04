@@ -50,6 +50,7 @@ services:
           cpus: '1.0'
           memory: '1.5G'
 
+
   ollama:
     image: ollama/ollama
     container_name: ollama
