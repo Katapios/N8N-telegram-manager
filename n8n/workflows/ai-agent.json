@@ -4,6 +4,7 @@
     {
       "parameters": {
         "path": "telegram-ai-agent",
+        "httpMethod": "POST",
         "responseMode": "onReceived",
         "options": {}
       },
@@ -75,7 +76,7 @@
         "url": "http://chroma:8000/api/v1/collections/ai_memory/query",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={\n  \"query_texts\": [ $json.query ],\n  \"n_results\": 5\n}"
+        "bodyParametersJson": "={{ JSON.stringify({ \"query_texts\": [ $json.query ], \"n_results\": 5 }) }}"
       },
       "name": "Chroma Query",
       "type": "n8n-nodes-base.httpRequest",
@@ -171,7 +172,7 @@
         "url": "http://chroma:8000/api/v1/collections/ai_memory/upsert",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={\n  \"ids\": [ Date.now().toString() ],\n  \"documents\": [ $json.question + \"\\n\\n\" + $json.answer ],\n  \"metadatas\": [ { \"source\": \"telegram\" } ]\n}"
+        "bodyParametersJson": "={{ JSON.stringify({ \"ids\": [ Date.now().toString() ], \"documents\": [ $json.question + \"\\n\\n\" + $json.answer ], \"metadatas\": [ { \"source\": \"telegram\" } ] }) }}"
       },
       "name": "Chroma Upsert",
       "type": "n8n-nodes-base.httpRequest",
@@ -226,11 +227,6 @@
             "node": "If Web Search",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Chroma Query",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -244,7 +240,13 @@
             "index": 0
           }
         ],
-        []
+        [
+          {
+            "node": "Chroma Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Chroma Query": {
