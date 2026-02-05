@@ -92,7 +92,7 @@
         "url": "http://chroma:8000/api/v1/collections/ai_memory/query",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({ \"query_embeddings\": [ $json.embedding ], \"n_results\": 5 }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ \"query_embeddings\": [ $json.embedding ], \"n_results\": 3 }) }}"
       },
       "name": "Chroma Query",
       "type": "n8n-nodes-base.httpRequest",
