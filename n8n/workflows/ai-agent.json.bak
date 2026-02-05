@@ -73,12 +73,12 @@
     {
       "parameters": {
         "requestMethod": "POST",
-        "url": "http://ollama:11434/api/embeddings",
+        "url": "http://chroma:8000/api/v1/collections/ai_memory/query",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": $env.OLLAMA_MODEL || \"llama3.2:3b\",\n  \"prompt\": $json.query\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ \"query_texts\": [ $json.query ], \"n_results\": 5 }) }}"
       },
-      "name": "Generate Query Embedding",
+      "name": "Chroma Query",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
       "position": [
@@ -88,29 +88,13 @@
     },
     {
       "parameters": {
-        "requestMethod": "POST",
-        "url": "http://chroma:8000/api/v1/collections/ai_memory/query",
-        "jsonParameters": true,
-        "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({ \"query_embeddings\": [ $json.embedding ], \"n_results\": 5 }) }}"
-      },
-      "name": "Chroma Query",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
-      "position": [
-        340,
-        220
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "const results = $json.documents || [];\nlet context = '';\nif (Array.isArray(results) && results.length > 0) {\n  const docs = results[0];\n  if (Array.isArray(docs)) {\n    context = docs.join('\\n');\n  }\n}\n\n// Access original data from Parse Telegram node because embedding node replaced context\nconst parseTelegramItems = $items(\"Parse Telegram\");\nconst originalData = parseTelegramItems && parseTelegramItems.length > 0 ? parseTelegramItems[0].json : {};\n\nreturn [{\n  chatId: originalData.chatId,\n  originalText: originalData.originalText,\n  query: originalData.query,\n  isWebSearch: originalData.isWebSearch,\n  memoryContext: context\n}];"
+        "functionCode": "const results = $json.documents || [];\nlet context = '';\nif (Array.isArray(results) && results.length > 0) {\n  const docs = results[0];\n  if (Array.isArray(docs)) {\n    context = docs.join('\\n');\n  }\n}\n\nreturn [{\n  chatId: $json.chatId || $prevNode.json.chatId,\n  originalText: $json.originalText || $prevNode.json.originalText,\n  query: $json.query || $prevNode.json.query,\n  isWebSearch: $json.isWebSearch || false,\n  memoryContext: context\n}];"
       },
       "name": "Build RAG Context",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        540,
+        360,
         220
       ]
     },
@@ -185,32 +169,16 @@
     {
       "parameters": {
         "requestMethod": "POST",
-        "url": "http://ollama:11434/api/embeddings",
-        "jsonParameters": true,
-        "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": $env.OLLAMA_MODEL || \"llama3.2:3b\",\n  \"prompt\": $json.question + \"\\n\\n\" + $json.answer\n}) }}"
-      },
-      "name": "Generate Answer Embedding",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
-      "position": [
-        1240,
-        220
-      ]
-    },
-    {
-      "parameters": {
-        "requestMethod": "POST",
         "url": "http://chroma:8000/api/v1/collections/ai_memory/upsert",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={\n  \"ids\": [ Date.now().toString() ],\n  \"embeddings\": [ $json.embedding ],\n  \"documents\": [ $node[\"Extract Answer\"].json.question + \"\\n\\n\" + $node[\"Extract Answer\"].json.answer ],\n  \"metadatas\": [ { \"source\": \"telegram\" } ]\n}"
+        "bodyParametersJson": "={{ JSON.stringify({ \"ids\": [ Date.now().toString() ], \"documents\": [ $json.question + \"\\n\\n\" + $json.answer ], \"metadatas\": [ { \"source\": \"telegram\" } ] }) }}"
       },
       "name": "Chroma Upsert",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
       "position": [
-        1440,
+        1240,
         220
       ]
     },
@@ -272,17 +240,6 @@
             "index": 0
           }
         ],
-        [
-          {
-            "node": "Generate Query Embedding",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Generate Query Embedding": {
-      "main": [
         [
           {
             "node": "Chroma Query",
@@ -362,23 +319,12 @@
       "main": [
         [
           {
-            "node": "Generate Answer Embedding",
+            "node": "Chroma Upsert",
             "type": "main",
             "index": 0
           },
           {
             "node": "Telegram Send Answer",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Generate Answer Embedding": {
-      "main": [
-        [
-          {
-            "node": "Chroma Upsert",
             "type": "main",
             "index": 0
           }
