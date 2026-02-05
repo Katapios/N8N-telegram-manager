@@ -30,6 +30,7 @@ services:
     container_name: n8n
     restart: unless-stopped
     environment:
+      - NODE_ENV=production
       - N8N_HOST=${N8N_HOST}
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
       - WEBHOOK_URL=${WEBHOOK_URL}
