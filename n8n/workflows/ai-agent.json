@@ -148,7 +148,7 @@
         "url": "https://api.tavily.com/search",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"api_key\": \"tvly-***************************\",\n  \"query\": $json.query,\n  \"search_depth\": \"basic\",\n  \"include_answer\": true\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"api_key\": $env.TAVILY_API_KEY,\n  \"query\": $json.query,\n  \"search_depth\": \"basic\",\n  \"include_answer\": true\n}) }}"
       },
       "name": "Tavily Search",
       "type": "n8n-nodes-base.httpRequest",
@@ -160,7 +160,7 @@
     },
     {
       "parameters": {
-        "functionCode": "let webContext = '';\nif ($json.answer) {\n  webContext = $json.answer;\n} else if (Array.isArray($json.results)) {\n  webContext = $json.results.map(r => `${r.title}\\n${r.content}`).join('\\n\\n');\n}\n\nreturn [{\n  chatId: $prevNode.json.chatId,\n  originalText: $prevNode.json.originalText,\n  query: $prevNode.json.query,\n  memoryContext: $prevNode.json.memoryContext || '',\n  webContext\n}];"
+        "functionCode": "let webContext = '';\nif ($json.answer) {\n  webContext = $json.answer;\n} else if (Array.isArray($json.results)) {\n  webContext = $json.results.map(r => `${r.title}\\n${r.content}`).join('\\n\\n');\n}\n\n// Access original data from Parse Telegram node\nconst parseTelegramItems = $items(\"Parse Telegram\");\nconst originalData = parseTelegramItems && parseTelegramItems.length > 0 ? parseTelegramItems[0].json : {};\n\nreturn [{\n  chatId: originalData.chatId,\n  originalText: originalData.originalText,\n  query: originalData.query,\n  memoryContext: '',\n  webContext\n}];"
       },
       "name": "Build Web Context",
       "type": "n8n-nodes-base.function",
