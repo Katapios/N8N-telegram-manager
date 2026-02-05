@@ -73,6 +73,34 @@
     {
       "parameters": {
         "requestMethod": "POST",
+        "url": "http://chroma:8000/api/v1/collections",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "{\"name\": \"ai_memory\", \"get_or_create\": true}"
+      },
+      "name": "Get Collection",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const original = $node[\"Parse Telegram\"].json;\nconst collection = $json;\nreturn [{ ...original, collectionId: collection.id }];"
+      },
+      "name": "Merge Collection ID",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        0,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
         "url": "http://ollama:11434/api/embeddings",
         "jsonParameters": true,
         "options": {},
@@ -89,7 +117,7 @@
     {
       "parameters": {
         "requestMethod": "POST",
-        "url": "http://chroma:8000/api/v1/collections/ai_memory/query",
+        "url": "={{ 'http://chroma:8000/api/v1/collections/' + $node[\"Merge Collection ID\"].json.collectionId + '/query' }}",
         "jsonParameters": true,
         "options": {},
         "bodyParametersJson": "={{ JSON.stringify({ \"query_embeddings\": [ $json.embedding ], \"n_results\": 3 }) }}"
@@ -160,7 +188,7 @@
         "url": "http://ollama:11434/api/chat",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={\n  \"model\": $env.OLLAMA_MODEL || \"llama3.2:3b\",\n  \"stream\": false,\n  \"messages\": [\n    {\"role\": \"system\", \"content\": $json.system},\n    {\"role\": \"user\", \"content\": $json.prompt}\n  ]\n}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": \"llama3.2:3b\",\n  \"stream\": false,\n  \"messages\": [\n    {\"role\": \"system\", \"content\": $json.system},\n    {\"role\": \"user\", \"content\": $json.prompt}\n  ]\n}) }}"
       },
       "name": "Ollama Chat",
       "type": "n8n-nodes-base.httpRequest",
@@ -201,10 +229,10 @@
     {
       "parameters": {
         "requestMethod": "POST",
-        "url": "http://chroma:8000/api/v1/collections/ai_memory/upsert",
+        "url": "={{ 'http://chroma:8000/api/v1/collections/' + $node[\"Merge Collection ID\"].json.collectionId + '/upsert' }}",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={\n  \"ids\": [ Date.now().toString() ],\n  \"embeddings\": [ $json.embedding ],\n  \"documents\": [ $node[\"Extract Answer\"].json.question + \"\\n\\n\" + $node[\"Extract Answer\"].json.answer ],\n  \"metadatas\": [ { \"source\": \"telegram\" } ]\n}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"ids\": [ Date.now().toString() ],\n  \"embeddings\": [ $json.embedding ],\n  \"documents\": [ $node[\"Extract Answer\"].json.question + \"\\n\\n\" + $node[\"Extract Answer\"].json.answer ],\n  \"metadatas\": [ { \"source\": \"telegram\" } ]\n}) }}"
       },
       "name": "Chroma Upsert",
       "type": "n8n-nodes-base.httpRequest",
@@ -255,6 +283,28 @@
             "type": "main",
             "index": 0
           },
+          {
+            "node": "Get Collection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Collection": {
+      "main": [
+        [
+          {
+            "node": "Merge Collection ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Collection ID": {
+      "main": [
+        [
           {
             "node": "If Web Search",
             "type": "main",
