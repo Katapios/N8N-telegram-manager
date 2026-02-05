@@ -200,7 +200,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const resp = $json;\nlet answer = '';\nif (resp.message && resp.message.content) {\n  answer = resp.message.content;\n}\n\nreturn [{\n  chatId: $prevNode.json.chatId,\n  answer,\n  question: $prevNode.json.prompt\n}];"
+        "functionCode": "const resp = $json;\nlet answer = '';\nif (resp.message && resp.message.content) {\n  answer = resp.message.content;\n}\n\n// Access original data from Build Prompt node\nconst promptNodeItems = $items(\"Build Prompt\");\nconst originalData = promptNodeItems && promptNodeItems.length > 0 ? promptNodeItems[0].json : {};\n\nreturn [{\n  chatId: originalData.chatId,\n  answer,\n  question: originalData.prompt\n}];"
       },
       "name": "Extract Answer",
       "type": "n8n-nodes-base.function",
