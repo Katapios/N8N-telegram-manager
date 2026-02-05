@@ -148,7 +148,7 @@
         "url": "https://api.tavily.com/search",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={\n  \"api_key\": $env.TAVILY_API_KEY,\n  \"query\": $json.query,\n  \"search_depth\": \"basic\",\n  \"include_answer\": true\n}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"api_key\": \"tvly-***************************\",\n  \"query\": $json.query,\n  \"search_depth\": \"basic\",\n  \"include_answer\": true\n}) }}"
       },
       "name": "Tavily Search",
       "type": "n8n-nodes-base.httpRequest",
