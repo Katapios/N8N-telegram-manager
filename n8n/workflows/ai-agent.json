@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const body = $json.body || {};\nconst message = body.message || {};\nconst chat = message.chat || {};\nconst text = message.text || '';\n\nconst isWebSearch = text.startsWith('/search ');\n\nreturn [{\n  chatId: chat.id,\n  originalText: text,\n  isWebSearch,\n  query: isWebSearch ? text.replace('/search ', '') : text\n}];"
+        "functionCode": "const body = $json.body || {};\nconst message = body.message || {};\nconst chat = message.chat || {};\nconst text = message.text || '';\nconst document = message.document;\n\nconst isWebSearch = text.startsWith('/search ');\nconst isDocument = !!document;\n\nreturn [{\n  chatId: chat.id,\n  originalText: text,\n  isWebSearch,\n  isDocument,\n  document,\n  query: isWebSearch ? text.replace('/search ', '') : text\n}];"
       },
       "name": "Parse Telegram",
       "type": "n8n-nodes-base.function",
@@ -52,6 +52,26 @@
     {
       "parameters": {
         "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.isDocument }}",
+              "value2": true
+            }
+          ],
+          "string": []
+        }
+      },
+      "name": "If Document",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -90,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
           "boolean": [],
           "string": [
             {
@@ -66,9 +86,105 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        -90,
+        90,
         420
       ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "={{ 'https://api.telegram.org/bot' + $env.TELEGRAM_TOKEN + '/getFile' }}",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={{ JSON.stringify({ \"file_id\": $json.document.file_id }) }}"
+      },
+      "name": "Get File Path",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        200,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "={{ 'https://api.telegram.org/file/bot' + $env.TELEGRAM_TOKEN + '/' + $json.result.file_path }}",
+        "jsonParameters": true,
+        "options": {},
+        "responseFormat": "string"
+      },
+      "name": "Download File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        400,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const text = $json.data || '';\n// Simple chunking by paragraphs or length\nconst chunkSize = 1000;\nconst chunks = [];\n\n// Basic split by newlines first\nconst paragraphs = text.split(/\\n\\s*\\n/);\n\nlet currentChunk = '';\nfor (const p of paragraphs) {\n  if ((currentChunk + p).length > chunkSize) {\n    if (currentChunk) chunks.push(currentChunk.trim());\n    currentChunk = p;\n  } else {\n    currentChunk += (currentChunk ? '\\n\\n' : '') + p;\n  }\n}\nif (currentChunk) chunks.push(currentChunk.trim());\n\n// If no paragraphs (single line), force split\nif (chunks.length === 0 && text.length > 0) {\n  for (let i = 0; i < text.length; i += chunkSize) {\n    chunks.push(text.slice(i, i + chunkSize));\n  }\n}\n\nreturn chunks.map((chunk, index) => ({\n  chunk,\n  chunkIndex: index,\n  totalChunks: chunks.length,\n  fileName: $node[\"Parse Telegram\"].json.document.file_name,\n  chatId: $node[\"Parse Telegram\"].json.chatId\n}));"
+      },
+      "name": "Split Text",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        600,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "http://ollama:11434/api/embeddings",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": $env.OLLAMA_MODEL || \"llama3.2:3b\",\n  \"prompt\": $json.chunk\n}) }}"
+      },
+      "name": "Embed Chunk",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        800,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "={{ 'http://chroma:8000/api/v1/collections/' + $node[\"Merge Collection ID\"].json.collectionId + '/upsert' }}",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"ids\": [ $node[\"Parse Telegram\"].json.document.file_id + '_' + $json.chunkIndex ],\n  \"embeddings\": [ $json.embedding ],\n  \"documents\": [ $json.chunk ],\n  \"metadatas\": [ { \"source\": \"file\", \"filename\": $json.fileName } ]\n}) }}"
+      },
+      "name": "Upsert Chunk",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ 'I have read \"' + $json.fileName + '\". Processed ' + ($json.chunkIndex + 1) + ' of ' + $json.totalChunks + ' chunks.' }}",
+        "additionalFields": {}
+      },
+      "name": "Notify Progress",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        700
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIALS_ID",
+          "name": "Telegram"
+        }
+      }
     },
     {
       "parameters": {
@@ -94,7 +210,7 @@
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
-        0,
+        200,
         420
       ]
     },
@@ -252,7 +368,7 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
       "position": [
-        1240,
+        1640,
         460
       ],
       "credentials": {
@@ -304,6 +420,24 @@
     },
     "Merge Collection ID": {
       "main": [
+        [
+          {
+            "node": "If Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Document": {
+      "main": [
+        [
+          {
+            "node": "Get File Path",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "If Web Search",
@@ -429,6 +563,61 @@
         [
           {
             "node": "Chroma Upsert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get File Path": {
+      "main": [
+        [
+          {
+            "node": "Download File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File": {
+      "main": [
+        [
+          {
+            "node": "Split Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Text": {
+      "main": [
+        [
+          {
+            "node": "Embed Chunk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed Chunk": {
+      "main": [
+        [
+          {
+            "node": "Upsert Chunk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Chunk": {
+      "main": [
+        [
+          {
+            "node": "Notify Progress",
             "type": "main",
             "index": 0
           }

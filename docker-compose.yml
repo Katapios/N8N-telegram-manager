@@ -72,7 +72,9 @@ services:
       # Рекомендуемая компактная модель для слабого ноутбука.
       # Перед первым запуском внутри контейнера выполните:
       #   ollama pull llama3.2:3b
-      - OLLAMA_MODEL=llama3.2:3b
+      # - OLLAMA_MODEL=llama3.2:3b
+      - OLLAMA_MODEL=llama3.1:8b
+      # - OLLAMA_MODEL=mistral:7b
     networks:
       - ai-agent-net
     tty: true
