@@ -264,7 +264,7 @@
         "url": "https://api.tavily.com/search",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"api_key\": $env.TAVILY_API_KEY,\n  \"query\": $json.query,\n  \"search_depth\": \"basic\",\n  \"include_answer\": true\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"api_key\": $env.TAVILY_API_KEY,\n  \"query\": $json.query,\n  \"search_depth\": \"advanced\",\n  \"max_results\": 7,\n  \"include_answer\": true,\n  \"include_raw_content\": true\n}) }}"
       },
       "name": "Tavily Search",
       "type": "n8n-nodes-base.httpRequest",
@@ -276,7 +276,7 @@
     },
     {
       "parameters": {
-        "functionCode": "let webContext = '';\nif ($json.answer) {\n  webContext = $json.answer;\n} else if (Array.isArray($json.results)) {\n  webContext = $json.results.map(r => `${r.title}\\n${r.content}`).join('\\n\\n');\n}\n\n// Access original data from Parse Telegram node\nconst parseTelegramItems = $items(\"Parse Telegram\");\nconst originalData = parseTelegramItems && parseTelegramItems.length > 0 ? parseTelegramItems[0].json : {};\n\nreturn [{\n  chatId: originalData.chatId,\n  originalText: originalData.originalText,\n  query: originalData.query,\n  memoryContext: '',\n  webContext\n}];"
+        "functionCode": "let webContext = '';\n\nif ($json.answer) {\n  webContext += `Tavily Direct Answer:\\n${$json.answer}\\n\\n`;\n}\n\nif (Array.isArray($json.results)) {\n  webContext += \"Search Results:\\n\";\n  webContext += $json.results.map((r, i) => `[${i+1}] Title: ${r.title}\\nURL: ${r.url}\\nContent: ${r.content}`).join('\\n\\n');\n}\n\n// Access original data from Parse Telegram node\nconst parseTelegramItems = $items(\"Parse Telegram\");\nconst originalData = parseTelegramItems && parseTelegramItems.length > 0 ? parseTelegramItems[0].json : {};\n\nreturn [{\n  chatId: originalData.chatId,\n  originalText: originalData.originalText,\n  query: originalData.query,\n  memoryContext: '',\n  webContext\n}];"
       },
       "name": "Build Web Context",
       "type": "n8n-nodes-base.function",
@@ -288,7 +288,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const system = 'You are a helpful Russian-speaking AI assistant working over Telegram. Be concise.';\n\nconst parts = [];\nif ($json.memoryContext) {\n  parts.push('Memory context:\\n' + $json.memoryContext);\n}\nif ($json.webContext) {\n  parts.push('Web search context:\\n' + $json.webContext);\n}\nconst context = parts.join('\\n\\n');\n\nlet content = '';\nif (context) {\n  content = `${context}\\n\\nUser: ${$json.query}\\nAssistant:`;\n} else {\n  content = `User: ${$json.query}\\nAssistant:`;\n}\n\nreturn [{\n  chatId: $json.chatId,\n  prompt: content,\n  system\n}];"
+        "functionCode": "const system = 'You are a helpful Russian-speaking AI assistant working over Telegram. \\n\\nIMPORTANT: If the user provides \"Web search context\", you MUST use it to answer the question. It is the most up-to-date information. Cite the sources if available (e.g. [1]). If the answer is not in the context, say so. Be concise.';\n\nconst parts = [];\nif ($json.memoryContext) {\n  parts.push('Memory context:\\n' + $json.memoryContext);\n}\nif ($json.webContext) {\n  parts.push('Web search context:\\n' + $json.webContext);\n}\nconst context = parts.join('\\n\\n');\n\nlet content = '';\nif (context) {\n  content = `${context}\\n\\nUser: ${$json.query}\\nAssistant:`;\n} else {\n  content = `User: ${$json.query}\\nAssistant:`;\n}\n\nreturn [{\n  chatId: $json.chatId,\n  prompt: content,\n  system\n}];"
       },
       "name": "Build Prompt",
       "type": "n8n-nodes-base.function",
