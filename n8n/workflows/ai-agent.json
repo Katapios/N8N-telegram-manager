@@ -154,10 +154,10 @@
     {
       "parameters": {
         "requestMethod": "POST",
-        "url": "={{ 'http://chroma:8000/api/v1/collections/' + $node[\"Merge Collection ID\"].json.collectionId + '/upsert' }}",
+        "url": "={{ 'http://chroma:8000/api/v1/collections/' + $('Merge Collection ID').first().json.collectionId + '/upsert' }}",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"ids\": [ $node[\"Parse Telegram\"].json.document.file_id + '_' + $json.chunkIndex ],\n  \"embeddings\": [ $json.embedding ],\n  \"documents\": [ $json.chunk ],\n  \"metadatas\": [ { \"source\": \"file\", \"filename\": $json.fileName } ]\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"ids\": [ $('Parse Telegram').first().json.document.file_id + '_' + $json.chunkIndex ],\n  \"embeddings\": [ $json.embedding ],\n  \"documents\": [ $json.chunk ],\n  \"metadatas\": [ { \"source\": \"file\", \"filename\": $json.fileName } ]\n}) }}"
       },
       "name": "Upsert Chunk",
       "type": "n8n-nodes-base.httpRequest",
@@ -169,8 +169,8 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $json.chatId }}",
-        "text": "={{ 'I have read \"' + $json.fileName + '\". Processed ' + ($json.chunkIndex + 1) + ' of ' + $json.totalChunks + ' chunks.' }}",
+        "chatId": "={{ $('Parse Telegram').first().json.chatId }}",
+        "text": "={{ 'I have read \"' + $('Parse Telegram').first().json.document.file_name + '\". Processed ' + ($('Split Text').item.json.chunkIndex + 1) + ' of ' + $('Split Text').item.json.totalChunks + ' chunks.' }}",
         "additionalFields": {}
       },
       "name": "Notify Progress",
