@@ -55,11 +55,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-    # deploy:
-    #   resources:
-    #     limits:
-    #       cpus: '1.0'
-    #       memory: '1.5G'
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: '1.5G'
 
 
   ollama:
@@ -72,17 +72,17 @@ services:
       # Рекомендуемая компактная модель для слабого ноутбука.
       # Перед первым запуском внутри контейнера выполните:
       #   ollama pull llama3.2:3b
-      # - OLLAMA_MODEL=llama3.2:3b
+      - OLLAMA_MODEL=llama3.2:3b
       # - OLLAMA_MODEL=llama3.1:8b
-      - OLLAMA_MODEL=mistral:7b
+      # - OLLAMA_MODEL=mistral:7b
     networks:
       - ai-agent-net
     tty: true
-    # deploy:
-    #   resources:
-    #     limits:
-    #       cpus: '1.5' # Оптимально для слабого ноутбука
-    #       memory: '4G'  # Достаточно для llama3.2:3b / 8B q4 на 16ГБ RAM
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5' # Оптимально для слабого ноутбука
+          memory: '4G'  # Достаточно для llama3.2:3b / 8B q4 на 16ГБ RAM
 
   chroma:
     image: chromadb/chroma:0.4.24
