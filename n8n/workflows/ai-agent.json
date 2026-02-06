@@ -92,11 +92,12 @@
     },
     {
       "parameters": {
-        "requestMethod": "POST",
+        "requestMethod": "GET",
         "url": "={{ 'https://api.telegram.org/bot' + $env.TELEGRAM_TOKEN + '/getFile' }}",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({ \"file_id\": $json.document.file_id }) }}"
+        "sendQuery": true,
+        "queryParametersJson": "={{ JSON.stringify({ \"file_id\": $json.document.file_id }) }}"
       },
       "name": "Get File Path",
       "type": "n8n-nodes-base.httpRequest",
