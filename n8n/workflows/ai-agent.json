@@ -305,7 +305,7 @@
         "url": "http://ollama:11434/api/chat",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": \"llama3.2:3b\",\n  \"stream\": false,\n  \"messages\": [\n    {\"role\": \"system\", \"content\": $json.system},\n    {\"role\": \"user\", \"content\": $json.prompt}\n  ]\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": \"llama3.2:3b\",\n  \"keep_alive\": \"30m\",\n  \"stream\": false,\n  \"messages\": [\n    {\"role\": \"system\", \"content\": $json.system},\n    {\"role\": \"user\", \"content\": $json.prompt}\n  ]\n}) }}"
       },
       "name": "Ollama Chat",
       "type": "n8n-nodes-base.httpRequest",
