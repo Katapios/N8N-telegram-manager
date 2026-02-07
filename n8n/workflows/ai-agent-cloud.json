@@ -146,7 +146,7 @@
             "value": "={{ 'Bearer ' + $env.OPENAI_API_KEY }}"
           }
         ],
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OPENAI_EMBEDDING_MODEL || \"text-embedding-3-small\"),\n  \"input\": $json.chunk\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n+  \"model\": ($env.OPENAI_EMBEDDING_MODEL || $env.OPENAI_MODEL || \"text-embedding-3-small\"),\n+  \"input\": $json.chunk\n+}) }}"
       },
       "name": "OpenAI Embed Chunk",
       "type": "n8n-nodes-base.httpRequest",
@@ -232,7 +232,7 @@
             "value": "={{ 'Bearer ' + $env.OPENAI_API_KEY }}"
           }
         ],
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OPENAI_EMBEDDING_MODEL || \"text-embedding-3-small\"),\n  \"input\": $json.query\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n+  \"model\": ($env.OPENAI_EMBEDDING_MODEL || $env.OPENAI_MODEL || \"text-embedding-3-small\"),\n+  \"input\": $json.query\n+}) }}"
       },
       "name": "OpenAI Generate Query Embedding",
       "type": "n8n-nodes-base.httpRequest",
@@ -356,7 +356,7 @@
             "value": "={{ 'Bearer ' + $env.OPENAI_API_KEY }}"
           }
         ],
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OPENAI_EMBEDDING_MODEL || \"text-embedding-3-small\"),\n  \"input\": ($json.question + \"\\n\\n\" + $json.answer).substring(0, 4000)\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n+  \"model\": ($env.OPENAI_EMBEDDING_MODEL || $env.OPENAI_MODEL || \"text-embedding-3-small\"),\n+  \"input\": ($json.question + \"\\n\\n\" + $json.answer).substring(0, 4000)\n+}) }}"
       },
       "name": "OpenAI Generate Answer Embedding",
       "type": "n8n-nodes-base.httpRequest",
