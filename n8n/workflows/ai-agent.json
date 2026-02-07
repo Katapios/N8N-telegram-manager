@@ -72,14 +72,13 @@
     {
       "parameters": {
         "conditions": {
-          "boolean": [],
-          "string": [
+          "boolean": [
             {
               "value1": "={{ $json.isWebSearch }}",
-              "operation": "equal",
-              "value2": "true"
+              "value2": true
             }
-          ]
+          ],
+          "string": []
         }
       },
       "name": "If Web Search",
@@ -249,7 +248,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const results = $json.documents || [];\nlet context = '';\nif (Array.isArray(results) && results.length > 0) {\n  const docs = results[0];\n  if (Array.isArray(docs)) {\n    context = docs.join('\\n');\n  }\n}\n\n// Access original data from Parse Telegram node because embedding node replaced context\nconst parseTelegramItems = $items(\"Parse Telegram\");\nconst originalData = parseTelegramItems && parseTelegramItems.length > 0 ? parseTelegramItems[0].json : {};\n\nreturn [{\n  chatId: originalData.chatId,\n  originalText: originalData.originalText,\n  query: originalData.query,\n  isWebSearch: originalData.isWebSearch,\n  memoryContext: context\n}];"
+        "functionCode": "const results = $json.documents || [];\nlet context = '';\nif (Array.isArray(results) && results.length > 0) {\n  const docs = results[0];\n  if (Array.isArray(docs)) {\n    context = docs.join('\\n');\n  }\n}\n\n// Access original data from Parse Telegram node\nconst originalData = $('Parse Telegram').first().json;\n\nreturn [{\n  chatId: originalData.chatId,\n  originalText: originalData.originalText,\n  query: originalData.query,\n  isWebSearch: originalData.isWebSearch,\n  memoryContext: context\n}];"
       },
       "name": "Build RAG Context",
       "type": "n8n-nodes-base.function",
@@ -277,7 +276,7 @@
     },
     {
       "parameters": {
-        "functionCode": "let webContext = '';\n\nif ($json.answer) {\n  webContext += `Tavily Direct Answer:\\n${$json.answer}\\n\\n`;\n}\n\nif (Array.isArray($json.results)) {\n  webContext += \"Search Results:\\n\";\n  webContext += $json.results.map((r, i) => `[${i+1}] Title: ${r.title}\\nURL: ${r.url}\\nContent: ${r.content}`).join('\\n\\n');\n}\n\n// Access original data from Parse Telegram node\nconst parseTelegramItems = $items(\"Parse Telegram\");\nconst originalData = parseTelegramItems && parseTelegramItems.length > 0 ? parseTelegramItems[0].json : {};\n\nreturn [{\n  chatId: originalData.chatId,\n  originalText: originalData.originalText,\n  query: originalData.query,\n  memoryContext: '',\n  webContext\n}];"
+        "functionCode": "let webContext = '';\n\nif ($json.answer) {\n  webContext += `Tavily Direct Answer:\\n${$json.answer}\\n\\n`;\n}\n\nif (Array.isArray($json.results)) {\n  webContext += \"Search Results:\\n\";\n  webContext += $json.results.map((r, i) => `[${i+1}] Title: ${r.title}\\nURL: ${r.url}\\nContent: ${r.content}`).join('\\n\\n');\n}\n\n// Access original data from Parse Telegram node\nconst originalData = $('Parse Telegram').first().json;\n\nreturn [{\n  chatId: originalData.chatId,\n  originalText: originalData.originalText,\n  query: originalData.query,\n  memoryContext: '',\n  webContext\n}];"
       },
       "name": "Build Web Context",
       "type": "n8n-nodes-base.function",
@@ -289,7 +288,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const system = 'You are a helpful Russian-speaking AI assistant working over Telegram. \\n\\nIMPORTANT: If the user provides \"Web search context\", you MUST use it to answer the question. It is the most up-to-date information. Cite the sources if available (e.g. [1]). If the answer is not in the context, say so. Be concise.';\n\nconst parts = [];\nif ($json.memoryContext) {\n  parts.push('Memory context:\\n' + $json.memoryContext);\n}\nif ($json.webContext) {\n  parts.push('Web search context:\\n' + $json.webContext);\n}\nconst context = parts.join('\\n\\n');\n\nlet content = '';\nif (context) {\n  content = `${context}\\n\\nUser: ${$json.query}\\nAssistant:`;\n} else {\n  content = `User: ${$json.query}\\nAssistant:`;\n}\n\nreturn [{\n  chatId: $json.chatId,\n  prompt: content,\n  system\n}];"
+        "functionCode": "const system = 'You are a helpful Russian-speaking AI assistant working over Telegram. \\n\\nIMPORTANT: If the user provides \"Web search context\", you MUST use it to answer the question. It is the most up-to-date information. Cite the sources if available (e.g. [1]). If the answer is not in the context, say so. Be concise.';\n\nconst parts = [];\nif ($json.memoryContext) {\n  parts.push('Memory context:\\n' + $json.memoryContext);\n}\nif ($json.webContext) {\n  parts.push('Web search context:\\n' + $json.webContext);\n}\nconst context = parts.join('\\n\\n');\n\nlet content = '';\nif (context) {\n  content = `${context}\\n\\nUser: ${$json.query}\\nAssistant:`;\n} else {\n  content = `User: ${$json.query}\\nAssistant:`;\n}\n\nreturn [{\n  chatId: $json.chatId,\n  prompt: content,\n  system,\n  query: $json.query\n}];"
       },
       "name": "Build Prompt",
       "type": "n8n-nodes-base.function",
@@ -317,7 +316,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const resp = $json;\nlet answer = '';\nif (resp.message && resp.message.content) {\n  answer = resp.message.content;\n}\n\n// Access original data from Build Prompt node\nconst promptNodeItems = $items(\"Build Prompt\");\nconst originalData = promptNodeItems && promptNodeItems.length > 0 ? promptNodeItems[0].json : {};\n\nreturn [{\n  chatId: originalData.chatId,\n  answer,\n  question: originalData.prompt\n}];"
+        "functionCode": "const resp = $json;\nlet answer = '';\nif (resp.message && resp.message.content) {\n  answer = resp.message.content;\n} else if (resp.error) {\n  answer = \"Error from AI: \" + JSON.stringify(resp.error);\n} else {\n  answer = \"No answer received from AI. Raw response: \" + JSON.stringify(resp);\n}\n\n// Access original data safely\nconst originalData = $('Parse Telegram').first().json;\nconst promptData = $('Build Prompt').first().json;\n\nreturn [{\n  chatId: originalData.chatId,\n  answer,\n  question: promptData.query\n}];"
       },
       "name": "Extract Answer",
       "type": "n8n-nodes-base.function",
@@ -333,7 +332,7 @@
         "url": "http://ollama:11434/api/embeddings",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": $env.OLLAMA_MODEL || \"llama3.2:3b\",\n  \"prompt\": $json.question + \"\\n\\n\" + $json.answer\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": $env.OLLAMA_MODEL || \"llama3.2:3b\",\n  \"prompt\": ($json.question + \"\\n\\n\" + $json.answer).substring(0, 4000)\n}) }}"
       },
       "name": "Generate Answer Embedding",
       "type": "n8n-nodes-base.httpRequest",
@@ -346,10 +345,10 @@
     {
       "parameters": {
         "requestMethod": "POST",
-        "url": "={{ 'http://chroma:8000/api/v1/collections/' + $node[\"Merge Collection ID\"].json.collectionId + '/upsert' }}",
+        "url": "={{ 'http://chroma:8000/api/v1/collections/' + $('Merge Collection ID').first().json.collectionId + '/upsert' }}",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"ids\": [ Date.now().toString() ],\n  \"embeddings\": [ $json.embedding ],\n  \"documents\": [ $node[\"Extract Answer\"].json.question + \"\\n\\n\" + $node[\"Extract Answer\"].json.answer ],\n  \"metadatas\": [ { \"source\": \"telegram\" } ]\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"ids\": [ Date.now().toString() ],\n  \"embeddings\": [ $json.embedding ],\n  \"documents\": [ $('Extract Answer').first().json.question + \"\\n\\n\" + $('Extract Answer').first().json.answer ],\n  \"metadatas\": [ { \"source\": \"telegram\" } ]\n}) }}"
       },
       "name": "Chroma Upsert",
       "type": "n8n-nodes-base.httpRequest",
@@ -516,7 +515,7 @@
           {
             "node": "Build Prompt",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ]
       ]
