@@ -37,6 +37,9 @@ services:
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - TAVILY_API_KEY=${TAVILY_API_KEY}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
     labels:
       - "traefik.enable=true"

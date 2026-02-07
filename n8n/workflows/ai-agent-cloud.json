@@ -1,9 +1,9 @@
 {
-  "name": "Local AI Agent (HTTP-based)",
+  "name": "Local AI Agent (Cloud-based)",
   "nodes": [
     {
       "parameters": {
-        "path": "telegram-ai-agent",
+        "path": "telegram-ai-agent-cloud",
         "httpMethod": "POST",
         "responseMode": "onReceived",
         "options": {}
@@ -15,7 +15,7 @@
         -520,
         300
       ],
-      "webhookId": "telegram-ai-agent"
+      "webhookId": "telegram-ai-agent-cloud"
     },
     {
       "parameters": {
@@ -124,7 +124,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const text = $json.data || '';\n// Simple chunking by paragraphs or length\nconst chunkSize = 1000;\nconst chunks = [];\n\n// Basic split by newlines first\nconst paragraphs = text.split(/\\n\\s*\\n/);\n\nlet currentChunk = '';\nfor (const p of paragraphs) {\n  if ((currentChunk + p).length > chunkSize) {\n    if (currentChunk) chunks.push(currentChunk.trim());\n    currentChunk = p;\n  } else {\n    currentChunk += (currentChunk ? '\\n\\n' : '') + p;\n  }\n}\nif (currentChunk) chunks.push(currentChunk.trim());\n\n// If no paragraphs (single line), force split\nif (chunks.length === 0 && text.length > 0) {\n  for (let i = 0; i < text.length; i += chunkSize) {\n    chunks.push(text.slice(i, i + chunkSize));\n  }\n}\n\nreturn chunks.map((chunk, index) => ({\n  chunk,\n  chunkIndex: index,\n  totalChunks: chunks.length,\n  fileName: $node[\"Parse Telegram\"].json.document.file_name,\n  chatId: $node[\"Parse Telegram\"].json.chatId\n}));"
+        "functionCode": "const text = $json.data || '';\nconst chunkSize = 1000;\nconst chunks = [];\nconst paragraphs = text.split(/\\n\\s*\\n/);\nlet currentChunk = '';\nfor (const p of paragraphs) {\n  if ((currentChunk + p).length > chunkSize) {\n    if (currentChunk) chunks.push(currentChunk.trim());\n    currentChunk = p;\n  } else {\n    currentChunk += (currentChunk ? '\\n\\n' : '') + p;\n  }\n}\nif (currentChunk) chunks.push(currentChunk.trim());\nif (chunks.length === 0 && text.length > 0) {\n  for (let i = 0; i < text.length; i += chunkSize) {\n    chunks.push(text.slice(i, i + chunkSize));\n  }\n}\nreturn chunks.map((chunk, index) => ({\n  chunk,\n  chunkIndex: index,\n  totalChunks: chunks.length,\n  fileName: $node[\"Parse Telegram\"].json.document.file_name,\n  chatId: $node[\"Parse Telegram\"].json.chatId\n}));"
       },
       "name": "Split Text",
       "type": "n8n-nodes-base.function",
@@ -137,18 +137,18 @@
     {
       "parameters": {
         "requestMethod": "POST",
-        "url": "={{ ($env.OLLAMA_BASE_URL || 'http://ollama:11434') + '/api/embeddings' }}",
+        "url": "https://api.openai.com/v1/embeddings",
         "jsonParameters": true,
         "options": {},
         "headerParameters": [
           {
             "name": "Authorization",
-            "value": "={{ $env.OLLAMA_API_KEY ? ('Bearer ' + $env.OLLAMA_API_KEY) : '' }}"
+            "value": "={{ 'Bearer ' + $env.OPENAI_API_KEY }}"
           }
         ],
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": $env.OLLAMA_MODEL || \"llama3.2:3b\",\n  \"prompt\": $json.chunk\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OPENAI_EMBEDDING_MODEL || \"text-embedding-3-small\"),\n  \"input\": $json.chunk\n}) }}"
       },
-      "name": "Embed Chunk",
+      "name": "OpenAI Embed Chunk",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
       "position": [
@@ -162,7 +162,7 @@
         "url": "={{ 'http://chroma:8000/api/v1/collections/' + $('Merge Collection ID').first().json.collectionId + '/upsert' }}",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"ids\": [ $('Parse Telegram').first().json.document.file_id + '_' + $json.chunkIndex ],\n  \"embeddings\": [ $json.embedding ],\n  \"documents\": [ $json.chunk ],\n  \"metadatas\": [ { \"source\": \"file\", \"filename\": $json.fileName } ]\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"ids\": [ $('Parse Telegram').first().json.document.file_id + '_' + $json.chunkIndex ],\n  \"embeddings\": [ $json.data[0].embedding ],\n  \"documents\": [ $json.chunk ],\n  \"metadatas\": [ { \"source\": \"file\", \"filename\": $json.fileName } ]\n}) }}"
       },
       "name": "Upsert Chunk",
       "type": "n8n-nodes-base.httpRequest",
@@ -223,18 +223,18 @@
     {
       "parameters": {
         "requestMethod": "POST",
-        "url": "={{ ($env.OLLAMA_BASE_URL || 'http://ollama:11434') + '/api/embeddings' }}",
+        "url": "https://api.openai.com/v1/embeddings",
         "jsonParameters": true,
         "options": {},
         "headerParameters": [
           {
             "name": "Authorization",
-            "value": "={{ $env.OLLAMA_API_KEY ? ('Bearer ' + $env.OLLAMA_API_KEY) : '' }}"
+            "value": "={{ 'Bearer ' + $env.OPENAI_API_KEY }}"
           }
         ],
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": $env.OLLAMA_MODEL || \"llama3.2:3b\",\n  \"prompt\": $json.query\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OPENAI_EMBEDDING_MODEL || \"text-embedding-3-small\"),\n  \"input\": $json.query\n}) }}"
       },
-      "name": "Generate Query Embedding",
+      "name": "OpenAI Generate Query Embedding",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
       "position": [
@@ -248,7 +248,7 @@
         "url": "={{ 'http://chroma:8000/api/v1/collections/' + $node[\"Merge Collection ID\"].json.collectionId + '/query' }}",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({ \"query_embeddings\": [ $json.embedding ], \"n_results\": 3 }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ \"query_embeddings\": [ $json.data[0].embedding ], \"n_results\": 3 }) }}"
       },
       "name": "Chroma Query",
       "type": "n8n-nodes-base.httpRequest",
@@ -260,7 +260,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const results = $json.documents || [];\nlet context = '';\nif (Array.isArray(results) && results.length > 0) {\n  const docs = results[0];\n  if (Array.isArray(docs)) {\n    context = docs.join('\\n');\n  }\n}\n\n// Access original data from Parse Telegram node\nconst originalData = $('Parse Telegram').first().json;\n\nreturn [{\n  chatId: originalData.chatId,\n  originalText: originalData.originalText,\n  query: originalData.query,\n  isWebSearch: originalData.isWebSearch,\n  memoryContext: context\n}];"
+        "functionCode": "const results = $json.documents || [];\nlet context = '';\nif (Array.isArray(results) && results.length > 0) {\n  const docs = results[0];\n  if (Array.isArray(docs)) {\n    context = docs.join('\\n');\n  }\n}\nconst originalData = $('Parse Telegram').first().json;\nreturn [{\n  chatId: originalData.chatId,\n  originalText: originalData.originalText,\n  query: originalData.query,\n  isWebSearch: originalData.isWebSearch,\n  memoryContext: context\n}];"
       },
       "name": "Build RAG Context",
       "type": "n8n-nodes-base.function",
@@ -288,7 +288,7 @@
     },
     {
       "parameters": {
-        "functionCode": "let webContext = '';\n\nif ($json.answer) {\n  webContext += `Tavily Direct Answer:\\n${$json.answer}\\n\\n`;\n}\n\nif (Array.isArray($json.results)) {\n  webContext += \"Search Results:\\n\";\n  webContext += $json.results.map((r, i) => `[${i+1}] Title: ${r.title}\\nURL: ${r.url}\\nContent: ${r.content}`).join('\\n\\n');\n}\n\n// Access original data from Parse Telegram node\nconst originalData = $('Parse Telegram').first().json;\n\nreturn [{\n  chatId: originalData.chatId,\n  originalText: originalData.originalText,\n  query: originalData.query,\n  memoryContext: '',\n  webContext\n}];"
+        "functionCode": "let webContext = '';\nif ($json.answer) {\n  webContext += `Tavily Direct Answer:\\n${$json.answer}\\n\\n`;\n}\nif (Array.isArray($json.results)) {\n  webContext += \"Search Results:\\n\";\n  webContext += $json.results.map((r, i) => `[${i+1}] Title: ${r.title}\\nURL: ${r.url}\\nContent: ${r.content}`).join('\\n\\n');\n}\nconst originalData = $('Parse Telegram').first().json;\nreturn [{\n  chatId: originalData.chatId,\n  originalText: originalData.originalText,\n  query: originalData.query,\n  memoryContext: '',\n  webContext\n}];"
       },
       "name": "Build Web Context",
       "type": "n8n-nodes-base.function",
@@ -300,7 +300,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const system = 'Ты русскоязычный ассистент в Telegram. Отвечай строго по \\\"Web search context\\\". Не используй внешние знания. Если ответа нет в контексте, прямо скажи об этом. Приводи ссылки на источники в формате [1], [2]. Будь краток.';\n\nconst parts = [];\nif ($json.memoryContext) {\n  parts.push('Memory context:\\n' + $json.memoryContext);\n}\nif ($json.webContext) {\n  parts.push('Web search context:\\n' + $json.webContext);\n}\nconst context = parts.join('\\n\\n');\n\nlet content = '';\nif (context) {\n  content = `<<CONTEXT_START>>\\n${context}\\n<<CONTEXT_END>>\\n\\nВопрос: ${$json.query}\\nОтвет:`;\n} else {\n  content = `Вопрос: ${$json.query}\\nОтвет:`;\n}\n\nreturn [{\n  chatId: $json.chatId,\n  prompt: content,\n  system,\n  query: $json.query\n}];"
+        "functionCode": "const system = 'Ты русскоязычный ассистент в Telegram. Отвечай строго по \\\"Web search context\\\". Не используй внешние знания. Если ответа нет в контексте, прямо скажи об этом. Приводи ссылки на источники в формате [1], [2]. Будь краток.';\nconst parts = [];\nif ($json.memoryContext) {\n  parts.push('Memory context:\\n' + $json.memoryContext);\n}\nif ($json.webContext) {\n  parts.push('Web search context:\\n' + $json.webContext);\n}\nconst context = parts.join('\\n\\n');\nlet content = '';\nif (context) {\n  content = `<<CONTEXT_START>>\\n${context}\\n<<CONTEXT_END>>\\n\\nВопрос: ${$json.query}\\nОтвет:`;\n} else {\n  content = `Вопрос: ${$json.query}\\nОтвет:`;\n}\nreturn [{\n  chatId: $json.chatId,\n  prompt: content,\n  system,\n  query: $json.query\n}];"
       },
       "name": "Build Prompt",
       "type": "n8n-nodes-base.function",
@@ -313,18 +313,18 @@
     {
       "parameters": {
         "requestMethod": "POST",
-        "url": "={{ ($env.OLLAMA_BASE_URL || 'http://ollama:11434') + '/api/chat' }}",
+        "url": "https://api.openai.com/v1/chat/completions",
         "jsonParameters": true,
         "options": {},
         "headerParameters": [
           {
             "name": "Authorization",
-            "value": "={{ $env.OLLAMA_API_KEY ? ('Bearer ' + $env.OLLAMA_API_KEY) : '' }}"
+            "value": "={{ 'Bearer ' + $env.OPENAI_API_KEY }}"
           }
         ],
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OLLAMA_MODEL || \"llama3.2:3b\"),\n  \"keep_alive\": \"30m\",\n  \"stream\": false,\n  \"options\": { \"temperature\": 0 },\n  \"messages\": [\n    {\"role\": \"system\", \"content\": $json.system},\n    {\"role\": \"user\", \"content\": $json.prompt}\n  ]\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OPENAI_MODEL || \"gpt-4o-mini\"),\n  \"temperature\": 0,\n  \"messages\": [\n    {\"role\": \"system\", \"content\": $json.system},\n    {\"role\": \"user\", \"content\": $json.prompt}\n  ]\n}) }}"
       },
-      "name": "Ollama Chat",
+      "name": "OpenAI Chat",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
       "position": [
@@ -334,7 +334,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const resp = $json;\nlet llmAnswer = '';\nif (resp.message && resp.message.content) {\n  llmAnswer = resp.message.content;\n} else if (resp.error) {\n  llmAnswer = \"Ошибка от AI: \" + JSON.stringify(resp.error);\n} else {\n  llmAnswer = \"Нет ответа от AI. Исходный ответ: \" + JSON.stringify(resp);\n}\n\nlet tavilyAnswer = '';\ntry {\n  const t = $('Tavily Search').first().json;\n  if (t && t.answer) tavilyAnswer = t.answer;\n} catch (e) {}\n\nconst finalAnswer = tavilyAnswer || llmAnswer;\n\nconst originalData = $('Parse Telegram').first().json;\nconst promptData = $('Build Prompt').first().json;\n\nreturn [{\n  chatId: originalData.chatId,\n  answer: finalAnswer,\n  question: promptData.query\n}];"
+        "functionCode": "const resp = $json;\nlet llmAnswer = '';\ntry {\n  if (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) {\n    llmAnswer = resp.choices[0].message.content;\n  }\n} catch (e) {}\nif (!llmAnswer && resp.error) {\n  llmAnswer = \"Ошибка от AI: \" + JSON.stringify(resp.error);\n}\nif (!llmAnswer) {\n  llmAnswer = \"Нет ответа от AI. Исходный ответ: \" + JSON.stringify(resp);\n}\nlet tavilyAnswer = '';\ntry {\n  const t = $('Tavily Search').first().json;\n  if (t && t.answer) tavilyAnswer = t.answer;\n} catch (e) {}\nconst finalAnswer = tavilyAnswer || llmAnswer;\nconst originalData = $('Parse Telegram').first().json;\nconst promptData = $('Build Prompt').first().json;\nreturn [{\n  chatId: originalData.chatId,\n  answer: finalAnswer,\n  question: promptData.query\n}];"
       },
       "name": "Extract Answer",
       "type": "n8n-nodes-base.function",
@@ -347,18 +347,18 @@
     {
       "parameters": {
         "requestMethod": "POST",
-        "url": "={{ ($env.OLLAMA_BASE_URL || 'http://ollama:11434') + '/api/embeddings' }}",
+        "url": "https://api.openai.com/v1/embeddings",
         "jsonParameters": true,
         "options": {},
         "headerParameters": [
           {
             "name": "Authorization",
-            "value": "={{ $env.OLLAMA_API_KEY ? ('Bearer ' + $env.OLLAMA_API_KEY) : '' }}"
+            "value": "={{ 'Bearer ' + $env.OPENAI_API_KEY }}"
           }
         ],
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": $env.OLLAMA_MODEL || \"llama3.2:3b\",\n  \"prompt\": ($json.question + \"\\n\\n\" + $json.answer).substring(0, 4000)\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OPENAI_EMBEDDING_MODEL || \"text-embedding-3-small\"),\n  \"input\": ($json.question + \"\\n\\n\" + $json.answer).substring(0, 4000)\n}) }}"
       },
-      "name": "Generate Answer Embedding",
+      "name": "OpenAI Generate Answer Embedding",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
       "position": [
@@ -372,7 +372,7 @@
         "url": "={{ 'http://chroma:8000/api/v1/collections/' + $('Merge Collection ID').first().json.collectionId + '/upsert' }}",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"ids\": [ Date.now().toString() ],\n  \"embeddings\": [ $json.embedding ],\n  \"documents\": [ $('Extract Answer').first().json.question + \"\\n\\n\" + $('Extract Answer').first().json.answer ],\n  \"metadatas\": [ { \"source\": \"telegram\" } ]\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"ids\": [ Date.now().toString() ],\n  \"embeddings\": [ $json.data[0].embedding ],\n  \"documents\": [ $('Extract Answer').first().json.question + \"\\n\\n\" + $('Extract Answer').first().json.answer ],\n  \"metadatas\": [ { \"source\": \"telegram\" } ]\n}) }}"
       },
       "name": "Chroma Upsert",
       "type": "n8n-nodes-base.httpRequest",
@@ -482,14 +482,14 @@
         ],
         [
           {
-            "node": "Generate Query Embedding",
+            "node": "OpenAI Generate Query Embedding",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Generate Query Embedding": {
+    "OpenAI Generate Query Embedding": {
       "main": [
         [
           {
@@ -548,14 +548,14 @@
       "main": [
         [
           {
-            "node": "Ollama Chat",
+            "node": "OpenAI Chat",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Ollama Chat": {
+    "OpenAI Chat": {
       "main": [
         [
           {
@@ -570,7 +570,7 @@
       "main": [
         [
           {
-            "node": "Generate Answer Embedding",
+            "node": "OpenAI Generate Answer Embedding",
             "type": "main",
             "index": 0
           },
@@ -582,7 +582,7 @@
         ]
       ]
     },
-    "Generate Answer Embedding": {
+    "OpenAI Generate Answer Embedding": {
       "main": [
         [
           {
@@ -619,14 +619,14 @@
       "main": [
         [
           {
-            "node": "Embed Chunk",
+            "node": "OpenAI Embed Chunk",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Embed Chunk": {
+    "OpenAI Embed Chunk": {
       "main": [
         [
           {

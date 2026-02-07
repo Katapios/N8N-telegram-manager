@@ -55,6 +55,9 @@
       - `GENERIC_TIMEZONE`: Ваш часовой пояс (например, `Europe/Moscow`).
       - `TELEGRAM_TOKEN`: Токен вашего Telegram-бота.
       - `TAVILY_API_KEY`: Ваш API-ключ от Tavily.
+      - `OLLAMA_MODEL`: Имя модели Ollama (например, `llama3.2:3b`).
+      - `OLLAMA_BASE_URL`: Базовый URL API Ollama. Для локального инстанса — `http://ollama:11434`. Для облака — например, `https://api.ollama.ai`.
+      - `OLLAMA_API_KEY`: Токен доступа к облачному API Ollama (если используется Ollama Cloud). Передается в заголовке `Authorization: Bearer <ключ>`.
       - `ACME_EMAIL`: Ваш email для получения уведомлений от Let's Encrypt.
 
 3.  **Настройте DNS:**
@@ -71,7 +74,7 @@
     - В импортированном workflow вам нужно настроить учетные данные (credentials) для Telegram, Chroma, Ollama и Tavily.
       - **Telegram:** Создайте новые "Telegram" credentials и введите токен вашего бота.
       - **Chroma:** Создайте новые "Chroma" credentials. URL должен быть `http://chroma:8000`.
-      - **Ollama:** Создайте новые "Ollama" credentials. URL должен быть `http://ollama:11434`.
+      - **Ollama:** Создайте новые "Ollama" credentials. URL должен быть `http://ollama:11434` для локального варианта или используйте `OLLAMA_BASE_URL` для подключения к облаку. При работе с Ollama Cloud добавьте `OLLAMA_API_KEY`.
       - **Tavily:** Создайте новые "Tavily" credentials и введите ваш API-ключ от Tavily.
     - Активируйте workflow (переключатель "Active" вверху справа).
 
@@ -99,6 +102,11 @@
 - `/search кто победил на евровидении 2024`
 
 Агент выполнит поиск через Tavily, проанализирует результаты и сформирует ответ.
+
+### Использование Ollama Cloud
+- Установите `OLLAMA_BASE_URL` на адрес облачного API (например, `https://api.ollama.ai`) и задайте `OLLAMA_API_KEY`.
+- Установите модель в `OLLAMA_MODEL` (например, `llama3.2:3b`).
+- В workflow HTTP-запросы к Ollama автоматически используют указанный базовый URL и добавляют заголовок авторизации при наличии ключа.
 
 ## Отладка
 
