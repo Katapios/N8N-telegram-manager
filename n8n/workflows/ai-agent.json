@@ -288,7 +288,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const system = 'You are a helpful Russian-speaking AI assistant working over Telegram. \\n\\nIMPORTANT: If the user provides \"Web search context\", you MUST use it to answer the question. It is the most up-to-date information. Cite the sources if available (e.g. [1]). If the answer is not in the context, say so. Be concise.';\n\nconst parts = [];\nif ($json.memoryContext) {\n  parts.push('Memory context:\\n' + $json.memoryContext);\n}\nif ($json.webContext) {\n  parts.push('Web search context:\\n' + $json.webContext);\n}\nconst context = parts.join('\\n\\n');\n\nlet content = '';\nif (context) {\n  content = `${context}\\n\\nUser: ${$json.query}\\nAssistant:`;\n} else {\n  content = `User: ${$json.query}\\nAssistant:`;\n}\n\nreturn [{\n  chatId: $json.chatId,\n  prompt: content,\n  system,\n  query: $json.query\n}];"
+        "functionCode": "const system = 'Ты русскоязычный ассистент в Telegram. Отвечай строго по \\\"Web search context\\\". Не используй внешние знания. Если ответа нет в контексте, прямо скажи об этом. Приводи ссылки на источники в формате [1], [2]. Будь краток.';\n\nconst parts = [];\nif ($json.memoryContext) {\n  parts.push('Memory context:\\n' + $json.memoryContext);\n}\nif ($json.webContext) {\n  parts.push('Web search context:\\n' + $json.webContext);\n}\nconst context = parts.join('\\n\\n');\n\nlet content = '';\nif (context) {\n  content = `<<CONTEXT_START>>\\n${context}\\n<<CONTEXT_END>>\\n\\nВопрос: ${$json.query}\\nОтвет:`;\n} else {\n  content = `Вопрос: ${$json.query}\\nОтвет:`;\n}\n\nreturn [{\n  chatId: $json.chatId,\n  prompt: content,\n  system,\n  query: $json.query\n}];"
       },
       "name": "Build Prompt",
       "type": "n8n-nodes-base.function",
@@ -304,7 +304,7 @@
         "url": "http://ollama:11434/api/chat",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": \"llama3.2:3b\",\n  \"keep_alive\": \"30m\",\n  \"stream\": false,\n  \"messages\": [\n    {\"role\": \"system\", \"content\": $json.system},\n    {\"role\": \"user\", \"content\": $json.prompt}\n  ]\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OLLAMA_MODEL || \"llama3.2:3b\"),\n  \"keep_alive\": \"30m\",\n  \"stream\": false,\n  \"options\": { \"temperature\": 0 },\n  \"messages\": [\n    {\"role\": \"system\", \"content\": $json.system},\n    {\"role\": \"user\", \"content\": $json.prompt}\n  ]\n}) }}"
       },
       "name": "Ollama Chat",
       "type": "n8n-nodes-base.httpRequest",
@@ -316,7 +316,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const resp = $json;\nlet answer = '';\nif (resp.message && resp.message.content) {\n  answer = resp.message.content;\n} else if (resp.error) {\n  answer = \"Error from AI: \" + JSON.stringify(resp.error);\n} else {\n  answer = \"No answer received from AI. Raw response: \" + JSON.stringify(resp);\n}\n\n// Access original data safely\nconst originalData = $('Parse Telegram').first().json;\nconst promptData = $('Build Prompt').first().json;\n\nreturn [{\n  chatId: originalData.chatId,\n  answer,\n  question: promptData.query\n}];"
+        "functionCode": "const resp = $json;\nlet llmAnswer = '';\nif (resp.message && resp.message.content) {\n  llmAnswer = resp.message.content;\n} else if (resp.error) {\n  llmAnswer = \"Ошибка от AI: \" + JSON.stringify(resp.error);\n} else {\n  llmAnswer = \"Нет ответа от AI. Исходный ответ: \" + JSON.stringify(resp);\n}\n\nlet tavilyAnswer = '';\ntry {\n  const t = $('Tavily Search').first().json;\n  if (t && t.answer) tavilyAnswer = t.answer;\n} catch (e) {}\n\nconst finalAnswer = tavilyAnswer || llmAnswer;\n\nconst originalData = $('Parse Telegram').first().json;\nconst promptData = $('Build Prompt').first().json;\n\nreturn [{\n  chatId: originalData.chatId,\n  answer: finalAnswer,\n  question: promptData.query\n}];"
       },
       "name": "Extract Answer",
       "type": "n8n-nodes-base.function",
