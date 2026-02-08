@@ -232,7 +232,7 @@
             "value": "={{ $env.OLLAMA_API_KEY ? ('Bearer ' + $env.OLLAMA_API_KEY) : '' }}"
           }
         ],
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OLLAMA_EMBEDDING_MODEL || \"nomic-embed-text\"),\n  \"prompt\": $json.query\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OLLAMA_EMBEDDING_MODEL || \"nomic-embed-text\"),\n  \"prompt\": (($json.query || '')).substring(0, (Number($env.OLLAMA_EMBEDDING_MAX_CHARS) || 2048))\n}) }}"
       },
       "name": "OpenAI Generate Query Embedding",
       "type": "n8n-nodes-base.httpRequest",
@@ -288,7 +288,7 @@
     },
     {
       "parameters": {
-        "functionCode": "let webContext = '';\nif ($json.answer) {\n  webContext += `Tavily Direct Answer:\\n${$json.answer}\\n\\n`;\n}\nif (Array.isArray($json.results)) {\n  webContext += \"Search Results:\\n\";\n  webContext += $json.results.map((r, i) => `[${i+1}] Title: ${r.title}\\nURL: ${r.url}\\nContent: ${r.content}`).join('\\n\\n');\n}\nconst originalData = $('Parse Telegram').first().json;\nreturn [{\n  chatId: originalData.chatId,\n  originalText: originalData.originalText,\n  query: originalData.query,\n  memoryContext: '',\n  webContext\n}];"
+        "functionCode": "let webContext = '';\nif ($json.answer) {\n  webContext += `Tavily Direct Answer:\\n${$json.answer}\\n\\n`;\n}\nconst results = Array.isArray($json.results) ? $json.results.slice(0, 3) : [];\nif (results.length) {\n  webContext += \"Search Results:\\n\";\n  webContext += results.map((r, i) => `[${i+1}] Title: ${r.title}\\nURL: ${r.url}\\nContent: ${(r.content || '').slice(0, 800)}`).join('\\n\\n');\n}\nconst originalData = $('Parse Telegram').first().json;\nreturn [{\n  chatId: originalData.chatId,\n  originalText: originalData.originalText,\n  query: originalData.query,\n  memoryContext: '',\n  webContext\n}];"
       },
       "name": "Build Web Context",
       "type": "n8n-nodes-base.function",
@@ -300,7 +300,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const system = 'Ты русскоязычный ассистент в Telegram. Отвечай строго по \\\"Web search context\\\". Не используй внешние знания. Если ответа нет в контексте, прямо скажи об этом. Приводи ссылки на источники в формате [1], [2]. Будь краток.';\nconst parts = [];\nif ($json.memoryContext) {\n  parts.push('Memory context:\\n' + $json.memoryContext);\n}\nif ($json.webContext) {\n  parts.push('Web search context:\\n' + $json.webContext);\n}\nconst context = parts.join('\\n\\n');\nlet content = '';\nif (context) {\n  content = `<<CONTEXT_START>>\\n${context}\\n<<CONTEXT_END>>\\n\\nВопрос: ${$json.query}\\nОтвет:`;\n} else {\n  content = `Вопрос: ${$json.query}\\nОтвет:`;\n}\nreturn [{\n  chatId: $json.chatId,\n  prompt: content,\n  system,\n  query: $json.query\n}];"
+        "functionCode": "const system = 'Ты русскоязычный ассистент в Telegram. Используй контекст (Memory и Web) и собственные знания для полноты ответа. Проверяй факты по контексту и указывай источники в формате [1], [2]. Размышляй внутренне, выводи краткий и точный ответ.';\nconst parts = [];\nif ($json.memoryContext) { parts.push('Memory context:\\n' + $json.memoryContext); }\nif ($json.webContext) { parts.push('Web search context:\\n' + $json.webContext); }\nconst MAX_CTX = Number($env.OLLAMA_PROMPT_MAX_CHARS) || 8000;\nlet context = parts.join('\\n\\n');\nif (context.length > MAX_CTX) { context = context.slice(0, MAX_CTX); }\nlet content = '';\nif (context) {\n  content = `<<CONTEXT_START>>\\n${context}\\n<<CONTEXT_END>>\\n\\nВопрос: ${$json.query}\\nОтвет:`;\n} else {\n  content = `Вопрос: ${$json.query}\\nОтвет:`;\n}\nreturn [{ chatId: $json.chatId, prompt: content, system, query: $json.query }];"
       },
       "name": "Build Prompt",
       "type": "n8n-nodes-base.function",
@@ -334,7 +334,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const resp = $json;\nlet llmAnswer = '';\ntry {\n  if (resp.message && resp.message.content) {\n    llmAnswer = resp.message.content;\n  } else if (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) {\n    llmAnswer = resp.choices[0].message.content;\n  }\n} catch (e) {}\nif (!llmAnswer && resp.error) {\n  llmAnswer = \"Ошибка от AI: \" + JSON.stringify(resp.error);\n}\nif (!llmAnswer) {\n  llmAnswer = \"Нет ответа от AI. Исходный ответ: \" + JSON.stringify(resp);\n}\nlet tavilyAnswer = '';\ntry {\n  const t = $('Tavily Search').first().json;\n  if (t && t.answer) tavilyAnswer = t.answer;\n} catch (e) {}\nconst finalAnswer = tavilyAnswer || llmAnswer;\nconst originalData = $('Parse Telegram').first().json;\nconst promptData = $('Build Prompt').first().json;\nreturn [{\n  chatId: originalData.chatId,\n  answer: finalAnswer,\n  question: promptData.query\n}];"
+        "functionCode": "const resp = $json;\nlet llmAnswer = '';\ntry {\n  if (resp.message && resp.message.content) {\n    llmAnswer = resp.message.content;\n  } else if (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) {\n    llmAnswer = resp.choices[0].message.content;\n  }\n} catch (e) {}\nif (!llmAnswer && resp.error) {\n  llmAnswer = \"Ошибка от AI: \" + JSON.stringify(resp.error);\n}\nif (!llmAnswer) {\n  llmAnswer = \"Нет ответа от AI. Исходный ответ: \" + JSON.stringify(resp);\n}\nlet tavilyAnswer = '';\ntry {\n  const t = $('Tavily Search').first().json;\n  if (t && t.answer) tavilyAnswer = t.answer;\n} catch (e) {}\nconst finalAnswer = tavilyAnswer ? (tavilyAnswer + \"\\n\\n\" + llmAnswer) : llmAnswer;\nconst originalData = $('Parse Telegram').first().json;\nconst promptData = $('Build Prompt').first().json;\nreturn [{ chatId: originalData.chatId, answer: finalAnswer, question: promptData.query }];"
       },
       "name": "Extract Answer",
       "type": "n8n-nodes-base.function",
@@ -356,7 +356,7 @@
             "value": "={{ $env.OLLAMA_API_KEY ? ('Bearer ' + $env.OLLAMA_API_KEY) : '' }}"
           }
         ],
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OLLAMA_EMBEDDING_MODEL || \"nomic-embed-text\"),\n  \"prompt\": ($json.question + \"\\n\\n\" + $json.answer).substring(0, 4000)\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OLLAMA_EMBEDDING_MODEL || \"nomic-embed-text\"),\n  \"prompt\": (($json.question || '') + \"\\n\\n\" + ($json.answer || '')).substring(0, (Number($env.OLLAMA_EMBEDDING_MAX_CHARS) || 2048))\n}) }}"
       },
       "name": "OpenAI Generate Answer Embedding",
       "type": "n8n-nodes-base.httpRequest",
