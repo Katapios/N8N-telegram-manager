@@ -324,7 +324,7 @@
         ],
         "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OLLAMA_MODEL || \"qwen3-coder:480b-cloud\"),\n  \"keep_alive\": \"30m\",\n  \"stream\": false,\n  \"options\": { \"temperature\": 0 },\n  \"messages\": [\n    {\"role\": \"system\", \"content\": $json.system},\n    {\"role\": \"user\", \"content\": $json.prompt}\n  ]\n}) }}"
       },
-      "name": "OpenAI Chat",
+      "name": "Ollama Chat",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
       "position": [
@@ -385,7 +385,7 @@
     {
       "parameters": {
         "chatId": "={{ $json.chatId }}",
-        "text": "={{ $json.answer }}",
+        "text": "={{ '[' + ($env.OLLAMA_MODEL || 'unknown') + '] ' + $json.answer }}",
         "additionalFields": {}
       },
       "name": "Telegram Send Answer",
@@ -548,14 +548,14 @@
       "main": [
         [
           {
-            "node": "OpenAI Chat",
+            "node": "Ollama Chat",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "OpenAI Chat": {
+    "Ollama Chat": {
       "main": [
         [
           {
