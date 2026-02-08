@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const body = $json.body || {};\nconst message = body.message || {};\nconst chat = message.chat || {};\nconst text = message.text || '';\nconst document = message.document;\n\nconst isWebSearch = text.startsWith('/search ');\nconst isDocument = !!document;\n\nreturn [{\n  chatId: chat.id,\n  originalText: text,\n  isWebSearch,\n  isDocument,\n  document,\n  query: isWebSearch ? text.replace('/search ', '') : text\n}];"
+        "functionCode": "const body = $json.body || {};\nconst message = body.message || {};\nconst chat = message.chat || {};\nconst text = message.text || '';\nconst document = message.document;\n\nconst isClear = text.trim() === '/clear';\nconst isWebSearch = text.startsWith('/search ');\nconst isDocument = !!document;\n\nreturn [{\n  chatId: chat.id,\n  originalText: text,\n  isWebSearch,\n  isDocument,\n  isClear,\n  document,\n  query: isClear ? '' : (isWebSearch ? text.replace('/search ', '') : text)\n}];"
       },
       "name": "Parse Telegram",
       "type": "n8n-nodes-base.function",
@@ -28,6 +28,80 @@
         -300,
         300
       ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.isClear }}",
+              "value2": true
+            }
+          ],
+          "string": []
+        }
+      },
+      "name": "If Clear",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        20,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "DELETE",
+        "url": "http://chroma:8000/api/v1/collections/ai_memory_ollama",
+        "jsonParameters": true,
+        "options": {
+          "ignoreResponseCode": true
+        }
+      },
+      "continueOnFail": true,
+      "name": "Clear Collection",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        220,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "http://chroma:8000/api/v1/collections",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "{\"name\": \"ai_memory_ollama\", \"get_or_create\": true}"
+      },
+      "name": "Recreate Collection",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        420,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse Telegram').first().json.chatId }}",
+        "text": "Контекст очищен.",
+        "additionalFields": {}
+      },
+      "name": "Telegram Clear Confirm",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        620,
+        140
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIALS_ID",
+          "name": "Telegram"
+        }
+      }
     },
     {
       "parameters": {
@@ -446,7 +520,47 @@
       "main": [
         [
           {
+            "node": "If Clear",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Clear": {
+      "main": [
+        [
+          {
+            "node": "Clear Collection",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "If Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Collection": {
+      "main": [
+        [
+          {
+            "node": "Recreate Collection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recreate Collection": {
+      "main": [
+        [
+          {
+            "node": "Telegram Clear Confirm",
             "type": "main",
             "index": 0
           }

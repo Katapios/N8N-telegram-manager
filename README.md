@@ -55,9 +55,12 @@
       - `GENERIC_TIMEZONE`: Ваш часовой пояс (например, `Europe/Moscow`).
       - `TELEGRAM_TOKEN`: Токен вашего Telegram-бота.
       - `TAVILY_API_KEY`: Ваш API-ключ от Tavily.
+      - `OLLAMA_EMBEDDING_MODEL`: Модель эмбеддингов (рекомендовано `nomic-embed-text`).
       - `OLLAMA_MODEL`: Имя модели Ollama (например, `llama3.2:3b`).
       - `OLLAMA_BASE_URL`: Базовый URL API Ollama. Для локального инстанса — `http://ollama:11434`. Для облака — например, `https://api.ollama.ai`.
       - `OLLAMA_API_KEY`: Токен доступа к облачному API Ollama (если используется Ollama Cloud). Передается в заголовке `Authorization: Bearer <ключ>`.
+      - `OLLAMA_EMBEDDING_MAX_CHARS`: Лимит символов для prompt эмбеддингов (по умолчанию `2048`).
+      - `OLLAMA_PROMPT_MAX_CHARS`: Лимит итогового контекста для общения с LLM (по умолчанию `8000`).
       - `ACME_EMAIL`: Ваш email для получения уведомлений от Let's Encrypt.
 
 3.  **Настройте DNS:**
@@ -70,11 +73,13 @@
 
 5.  **Настройте n8n:**
     - Откройте n8n в вашем браузере (например, `https://n8n.your-domain.com`).
-    - Создайте новый workflow и импортируйте файл `n8n/workflows/ai-agent.json`.
+    - Создайте новый workflow и импортируйте один из вариантов:
+      - Локальный: `n8n/workflows/ai-agent.json`
+      - Облачный/гибрид: `n8n/workflows/ai-agent-cloud.json` (использует переменные `OLLAMA_BASE_URL`, `OLLAMA_API_KEY` и отдельную модель эмбеддингов `OLLAMA_EMBEDDING_MODEL`)
     - В импортированном workflow вам нужно настроить учетные данные (credentials) для Telegram, Chroma, Ollama и Tavily.
       - **Telegram:** Создайте новые "Telegram" credentials и введите токен вашего бота.
       - **Chroma:** Создайте новые "Chroma" credentials. URL должен быть `http://chroma:8000`.
-      - **Ollama:** Создайте новые "Ollama" credentials. URL должен быть `http://ollama:11434` для локального варианта или используйте `OLLAMA_BASE_URL` для подключения к облаку. При работе с Ollama Cloud добавьте `OLLAMA_API_KEY`.
+      - **Ollama:** Создайте новые "Ollama" credentials. URL должен быть `http://ollama:11434` для локального варианта или используйте `OLLAMA_BASE_URL` для подключения к облаку. При работе с Ollama Cloud добавьте `OLLAMA_API_KEY`. Убедитесь, что `OLLAMA_MODEL` (чат‑модель) и `OLLAMA_EMBEDDING_MODEL` (эмбеддинги) доступны в используемом инстансе Ollama.
       - **Tavily:** Создайте новые "Tavily" credentials и введите ваш API-ключ от Tavily.
     - Активируйте workflow (переключатель "Active" вверху справа).
 
@@ -92,6 +97,10 @@
 ### Основной режим (RAG)
 Просто пишите сообщения боту. Он будет искать ответы в своей локальной памяти (ChromaDB) и отвечать, используя этот контекст.
 
+### Команды в Telegram
+- `/search <запрос>` — поиск в интернете через Tavily, затем анализ и ответ.
+- `/clear` — очистка долговременной памяти (коллекции Chroma) текущего агента.
+
 ### Поиск в интернете
 Чтобы найти актуальную информацию в интернете, используйте команду `/search`:
 ```text
@@ -107,6 +116,27 @@
 - Установите `OLLAMA_BASE_URL` на адрес облачного API (например, `https://api.ollama.ai`) и задайте `OLLAMA_API_KEY`.
 - Установите модель в `OLLAMA_MODEL` (например, `llama3.2:3b`).
 - В workflow HTTP-запросы к Ollama автоматически используют указанный базовый URL и добавляют заголовок авторизации при наличии ключа.
+
+## Модели для Ollama (локальный режим)
+
+Для корректной работы RAG и диалоговой части в локальном Docker‑инстансе Ollama необходимо заранее загрузить модели:
+
+- Чат‑модель (LLM), компактная и быстрая:
+  - рекомендовано: `llama3.2:3b`
+  - альтернативы: `mistral:7b`, `qwen2.5:7b-instruct` (требуют больше памяти)
+- Модель эмбеддингов:
+  - обязательно: `nomic-embed-text`
+
+Команды загрузки внутри контейнера Docker:
+
+```bash
+docker exec -it ollama ollama pull llama3.2:3b
+docker exec -it ollama ollama pull nomic-embed-text
+```
+
+После загрузки установите переменные:
+- `OLLAMA_MODEL=llama3.2:3b`
+- `OLLAMA_EMBEDDING_MODEL=nomic-embed-text`
 
 ## Отладка
 
@@ -129,6 +159,7 @@
 - **"502 Bad Gateway":** Обычно это означает, что контейнер n8n не запущен или недоступен для Traefik. Проверьте логи обоих контейнеров.
 - **"404 Not Found":** Может означать, что URL вебхука указан неверно или workflow не активирован.
 - **Ошибки Ollama:** Если у вас проблемы с Ollama, вы можете попробовать запустить его в режиме отладки, добавив переменную окружения `OLLAMA_DEBUG=1` в `docker-compose.yml`.
+- **Превышение контекста эмбеддингов/LLM:** Настройте лимиты `OLLAMA_EMBEDDING_MAX_CHARS` и `OLLAMA_PROMPT_MAX_CHARS`, чтобы избежать ошибок вроде `input length exceeds the context length`.
 
 ## Как добавлять новые узлы
 
