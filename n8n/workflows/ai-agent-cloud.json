@@ -198,7 +198,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const text = $json.data || '';\nconst chunkSize = 1000;\nconst chunks = [];\nconst paragraphs = text.split(/\\n\\s*\\n/);\nlet currentChunk = '';\nfor (const p of paragraphs) {\n  if ((currentChunk + p).length > chunkSize) {\n    if (currentChunk) chunks.push(currentChunk.trim());\n    currentChunk = p;\n  } else {\n    currentChunk += (currentChunk ? '\\n\\n' : '') + p;\n  }\n}\nif (currentChunk) chunks.push(currentChunk.trim());\nif (chunks.length === 0 && text.length > 0) {\n  for (let i = 0; i < text.length; i += chunkSize) {\n    chunks.push(text.slice(i, i + chunkSize));\n  }\n}\nreturn chunks.map((chunk, index) => ({\n  chunk,\n  chunkIndex: index,\n  totalChunks: chunks.length,\n  fileName: $node[\"Parse Telegram\"].json.document.file_name,\n  chatId: $node[\"Parse Telegram\"].json.chatId\n}));"
+        "functionCode": "const text = $json.data || '';\nconst maxChunk = Number($env.OLLAMA_EMBEDDING_MAX_CHARS) || 2048;\nconst preferredChunk = Math.min(1000, maxChunk);\nconst chunks = [];\nconst paragraphs = text.split(/\\n\\s*\\n/);\nlet currentChunk = '';\nfor (const pRaw of paragraphs) {\n  const p = pRaw.trim();\n  if (!p) continue;\n  if (p.length > maxChunk) {\n    if (currentChunk) {\n      chunks.push(currentChunk.trim());\n      currentChunk = '';\n    }\n    for (let i = 0; i < p.length; i += maxChunk) {\n      chunks.push(p.slice(i, i + maxChunk));\n    }\n    continue;\n  }\n  const separator = currentChunk ? '\\n\\n' : '';\n  if ((currentChunk + separator + p).length > preferredChunk) {\n    if (currentChunk) chunks.push(currentChunk.trim());\n    currentChunk = p;\n  } else {\n    currentChunk += separator + p;\n  }\n}\nif (currentChunk) chunks.push(currentChunk.trim());\nif (chunks.length === 0 && text.length > 0) {\n  for (let i = 0; i < text.length; i += maxChunk) {\n    chunks.push(text.slice(i, i + maxChunk));\n  }\n}\nconst safeChunks = chunks.map((chunk) => chunk.slice(0, maxChunk)).filter((chunk) => chunk.length > 0);\nreturn safeChunks.map((chunk, index) => ({\n  chunk,\n  chunkIndex: index,\n  totalChunks: safeChunks.length,\n  fileName: $node[\"Parse Telegram\"].json.document.file_name,\n  chatId: $node[\"Parse Telegram\"].json.chatId\n}));"
       },
       "name": "Split Text",
       "type": "n8n-nodes-base.function",
@@ -220,7 +220,7 @@
             "value": "={{ $env.OLLAMA_API_KEY ? ('Bearer ' + $env.OLLAMA_API_KEY) : '' }}"
           }
         ],
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OLLAMA_EMBEDDING_MODEL || \"nomic-embed-text\"),\n  \"prompt\": $json.chunk\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OLLAMA_EMBEDDING_MODEL || \"nomic-embed-text\"),\n  \"prompt\": ($json.chunk || '').substring(0, (Number($env.OLLAMA_EMBEDDING_MAX_CHARS) || 2048))\n}) }}"
       },
       "name": "OpenAI Embed Chunk",
       "type": "n8n-nodes-base.httpRequest",
