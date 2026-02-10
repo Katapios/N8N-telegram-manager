@@ -1,0 +1,658 @@
+{
+    "name": "Telegram AI Agent (Cloud-based Optimized)",
+    "nodes": [
+        {
+            "parameters": {
+                "path": "telegram-ai-agent-cloud",
+                "httpMethod": "POST",
+                "responseMode": "onReceived",
+                "options": {}
+            },
+            "name": "Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                -520,
+                300
+            ],
+            "webhookId": "telegram-ai-agent-cloud"
+        },
+        {
+            "parameters": {
+                "functionCode": "const body = $json.body || {};\nconst message = body.message || {};\nconst chat = message.chat || {};\nconst text = message.text || '';\nconst document = message.document;\n\nconst isClear = text.trim() === '/clear';\nconst isWebSearch = text.startsWith('/search ');\nconst isDocument = !!document;\n\nreturn [{\n  chatId: chat.id,\n  originalText: text,\n  isWebSearch,\n  isDocument,\n  isClear,\n  document,\n  query: isClear ? '' : (isWebSearch ? text.replace('/search ', '') : text)\n}];"
+            },
+            "name": "Parse Telegram",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [
+                -300,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "boolean": [
+                        {
+                            "value1": "={{ $json.isClear }}",
+                            "value2": true
+                        }
+                    ]
+                }
+            },
+            "name": "If Clear",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                20,
+                320
+            ]
+        },
+        {
+            "parameters": {
+                "requestMethod": "DELETE",
+                "url": "http://chroma:8000/api/v1/collections/ai_memory_ollama",
+                "options": {
+                    "ignoreResponseCode": true
+                }
+            },
+            "name": "Clear Collection",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 1,
+            "position": [
+                220,
+                140
+            ]
+        },
+        {
+            "parameters": {
+                "requestMethod": "POST",
+                "url": "http://chroma:8000/api/v1/collections",
+                "bodyParametersJson": "{\"name\": \"ai_memory_ollama\", \"get_or_create\": true}"
+            },
+            "name": "Recreate Collection",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 1,
+            "position": [
+                420,
+                140
+            ]
+        },
+        {
+            "parameters": {
+                "chatId": "={{ $('Parse Telegram').first().json.chatId }}",
+                "text": "✅ Контекст памяти полностью очищен."
+            },
+            "name": "Telegram Clear Confirm",
+            "type": "n8n-nodes-base.telegram",
+            "typeVersion": 1,
+            "position": [
+                620,
+                140
+            ]
+        },
+        {
+            "parameters": {
+                "chatId": "={{ $json.chatId }}",
+                "text": "🤔 Думаю..."
+            },
+            "name": "Telegram Typing",
+            "type": "n8n-nodes-base.telegram",
+            "typeVersion": 1,
+            "position": [
+                -90,
+                140
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "boolean": [
+                        {
+                            "value1": "={{ $json.isDocument }}",
+                            "value2": true
+                        }
+                    ]
+                }
+            },
+            "name": "If Document",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                -90,
+                560
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "boolean": [
+                        {
+                            "value1": "={{ $json.isWebSearch }}",
+                            "value2": true
+                        }
+                    ]
+                }
+            },
+            "name": "If Web Search",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                90,
+                420
+            ]
+        },
+        {
+            "parameters": {
+                "requestMethod": "GET",
+                "url": "={{ 'https://api.telegram.org/bot' + $env.TELEGRAM_TOKEN + '/getFile' }}",
+                "queryParametersJson": "={{ JSON.stringify({ \"file_id\": $json.document.file_id }) }}"
+            },
+            "name": "Get File Path",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 1,
+            "position": [
+                200,
+                700
+            ]
+        },
+        {
+            "parameters": {
+                "requestMethod": "GET",
+                "url": "={{ 'https://api.telegram.org/file/bot' + $env.TELEGRAM_TOKEN + '/' + $json.result.file_path }}",
+                "responseFormat": "string"
+            },
+            "name": "Download File",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 1,
+            "position": [
+                400,
+                700
+            ]
+        },
+        {
+            "parameters": {
+                "functionCode": "const text = $json.data || '';\nconst maxChunk = Number($env.OLLAMA_EMBEDDING_MAX_CHARS) || 2048;\nconst chunks = [];\nconst paragraphs = text.split(/\\n\\s*\\n/);\nlet currentChunk = '';\nfor (const p of paragraphs) {\n  if ((currentChunk + p).length > maxChunk) {\n    chunks.push(currentChunk.trim());\n    currentChunk = p;\n  } else {\n    currentChunk += '\\n\\n' + p;\n  }\n}\nif (currentChunk) chunks.push(currentChunk.trim());\nreturn chunks.map((chunk, index) => ({\n  chunk,\n  chunkIndex: index,\n  totalChunks: chunks.length,\n  fileName: $node[\"Parse Telegram\"].json.document.file_name,\n  chatId: $node[\"Parse Telegram\"].json.chatId\n}));"
+            },
+            "name": "Split Text",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [
+                600,
+                700
+            ]
+        },
+        {
+            "parameters": {
+                "requestMethod": "POST",
+                "url": "http://ollama:11434/api/embeddings",
+                "headerParameters": [
+                    {
+                        "name": "Authorization",
+                        "value": "={{ $env.OLLAMA_API_KEY ? ('Bearer ' + $env.OLLAMA_API_KEY) : '' }}"
+                    }
+                ],
+                "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OLLAMA_EMBEDDING_MODEL || \"nomic-embed-text\"),\n  \"prompt\": $json.chunk\n}) }}"
+            },
+            "name": "Embed Chunk",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 1,
+            "position": [
+                800,
+                700
+            ]
+        },
+        {
+            "parameters": {
+                "requestMethod": "POST",
+                "url": "={{ 'http://chroma:8000/api/v1/collections/' + $('Merge Collection ID').first().json.collectionId + '/upsert' }}",
+                "bodyParametersJson": "={{ JSON.stringify({\n  \"ids\": [ $('Parse Telegram').first().json.document.file_id + '_' + $json.chunkIndex ],\n  \"embeddings\": [ $json.embedding ],\n  \"documents\": [ $json.chunk ],\n  \"metadatas\": [ { \"source\": \"file\", \"filename\": $json.fileName } ]\n}) }}"
+            },
+            "name": "Upsert Chunk",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 1,
+            "position": [
+                1000,
+                700
+            ]
+        },
+        {
+            "parameters": {
+                "chatId": "={{ $('Parse Telegram').first().json.chatId }}",
+                "text": "={{ '📖 Прочитал файл \"' + $('Parse Telegram').first().json.document.file_name + '\". Успешно загружено ' + $('Split Text').item.json.totalChunks + ' фрагментов.' }}"
+            },
+            "name": "Notify Progress",
+            "type": "n8n-nodes-base.telegram",
+            "typeVersion": 1,
+            "position": [
+                1200,
+                700
+            ]
+        },
+        {
+            "parameters": {
+                "requestMethod": "POST",
+                "url": "http://chroma:8000/api/v1/collections",
+                "bodyParametersJson": "{\"name\": \"ai_memory_ollama\", \"get_or_create\": true}"
+            },
+            "name": "Get Collection",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 1,
+            "position": [
+                -200,
+                420
+            ]
+        },
+        {
+            "parameters": {
+                "functionCode": "const original = $node[\"Parse Telegram\"].json;\nconst collection = $json;\nreturn [{ ...original, collectionId: collection.id }];"
+            },
+            "name": "Merge Collection ID",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [
+                200,
+                420
+            ]
+        },
+        {
+            "parameters": {
+                "requestMethod": "POST",
+                "url": "http://ollama:11434/api/embeddings",
+                "headerParameters": [
+                    {
+                        "name": "Authorization",
+                        "value": "={{ $env.OLLAMA_API_KEY ? ('Bearer ' + $env.OLLAMA_API_KEY) : '' }}"
+                    }
+                ],
+                "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OLLAMA_EMBEDDING_MODEL || \"nomic-embed-text\"),\n  \"prompt\": $json.query\n}) }}"
+            },
+            "name": "Embed Query",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 1,
+            "position": [
+                140,
+                220
+            ]
+        },
+        {
+            "parameters": {
+                "requestMethod": "POST",
+                "url": "={{ 'http://chroma:8000/api/v1/collections/' + $node[\"Merge Collection ID\"].json.collectionId + '/query' }}",
+                "bodyParametersJson": "={{ JSON.stringify({ \"query_embeddings\": [ $json.embedding ], \"n_results\": 5 }) }}"
+            },
+            "name": "Chroma Query",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 1,
+            "position": [
+                340,
+                220
+            ]
+        },
+        {
+            "parameters": {
+                "functionCode": "const results = $json.documents || [];\nlet context = '';\nif (results.length > 0 && Array.isArray(results[0])) {\n  context = results[0].join('\\n---\\n');\n}\nconst originalData = $('Parse Telegram').first().json;\nreturn [{\n  chatId: originalData.chatId,\n  query: originalData.query,\n  memoryContext: context\n}];"
+            },
+            "name": "Build RAG Context",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [
+                540,
+                220
+            ]
+        },
+        {
+            "parameters": {
+                "requestMethod": "POST",
+                "url": "https://api.tavily.com/search",
+                "bodyParametersJson": "={{ JSON.stringify({\n  \"api_key\": $env.TAVILY_API_KEY,\n  \"query\": $json.query,\n  \"search_depth\": \"advanced\"\n}) }}"
+            },
+            "name": "Tavily Search",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 1,
+            "position": [
+                140,
+                520
+            ]
+        },
+        {
+            "parameters": {
+                "functionCode": "let webContext = $json.answer ? `Прямой ответ: ${$json.answer}\\n\\n` : '';\nconst results = $json.results || [];\nwebContext += results.slice(0, 3).map((r, i) => `[${i+1}] ${r.title}: ${r.content}`).join('\\n\\n');\nconst originalData = $('Parse Telegram').first().json;\nreturn [{ chatId: originalData.chatId, query: originalData.query, webContext }];"
+            },
+            "name": "Build Web Context",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [
+                360,
+                520
+            ]
+        },
+        {
+            "parameters": {
+                "functionCode": "const system = 'Ты — продвинутый ИИ-ассистент. Используй предоставленный контекст (Memory/Web) для ответа. Если информации нет — отвечай из своих знаний. Ссылайся на источники [1].';\nconst memory = $node[\"Build RAG Context\"].json.memoryContext || '';\nconst web = $node[\"Build Web Context\"].maybeGet()?.json?.webContext || '';\nconst prompt = `КОНТЕКСТ ИЗ ПАМЯТИ:\\n${memory}\\n\\nКОНТЕКСТ ИЗ СЕТИ:\\n${web}\\n\\nВОПРОС: ${$json.query}`;\nreturn [{ chatId: $json.chatId, prompt, system, query: $json.query }];"
+            },
+            "name": "Build Prompt",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [
+                580,
+                340
+            ]
+        },
+        {
+            "parameters": {
+                "requestMethod": "POST",
+                "url": "={{ $env.OLLAMA_BASE_URL + '/api/chat' }}",
+                "headerParameters": [
+                    {
+                        "name": "Authorization",
+                        "value": "={{ $env.OLLAMA_API_KEY ? ('Bearer ' + $env.OLLAMA_API_KEY) : '' }}"
+                    }
+                ],
+                "bodyParametersJson": "={{ JSON.stringify({\n  \"model\": ($env.OLLAMA_MODEL || \"qwen3-coder:480b-cloud\"),\n  \"stream\": false,\n  \"messages\": [\n    {\"role\": \"system\", \"content\": $json.system},\n    {\"role\": \"user\", \"content\": $json.prompt}\n  ]\n}) }}"
+            },
+            "name": "Ollama Chat",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 1,
+            "position": [
+                800,
+                340
+            ]
+        },
+        {
+            "parameters": {
+                "functionCode": "const answer = $json.message.content;\nreturn [{ chatId: $json.chatId, answer, question: $('Build Prompt').first().json.query }];"
+            },
+            "name": "Extract Answer",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [
+                1020,
+                340
+            ]
+        },
+        {
+            "parameters": {
+                "chatId": "={{ $json.chatId }}",
+                "text": "={{ '🤖 [' + ($env.OLLAMA_MODEL || 'cloud') + ']:\\n\\n' + $json.answer }}"
+            },
+            "name": "Telegram Send Answer",
+            "type": "n8n-nodes-base.telegram",
+            "typeVersion": 1,
+            "position": [
+                1640,
+                460
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Telegram",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Telegram": {
+            "main": [
+                [
+                    {
+                        "node": "Telegram Typing",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Get Collection",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Collection": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Collection ID",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Merge Collection ID": {
+            "main": [
+                [
+                    {
+                        "node": "If Clear",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "If Clear": {
+            "main": [
+                [
+                    {
+                        "node": "Clear Collection",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "If Document",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Clear Collection": {
+            "main": [
+                [
+                    {
+                        "node": "Recreate Collection",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Recreate Collection": {
+            "main": [
+                [
+                    {
+                        "node": "Telegram Clear Confirm",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "If Document": {
+            "main": [
+                [
+                    {
+                        "node": "Get File Path",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "If Web Search",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "If Web Search": {
+            "main": [
+                [
+                    {
+                        "node": "Tavily Search",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Embed Query",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Embed Query": {
+            "main": [
+                [
+                    {
+                        "node": "Chroma Query",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Chroma Query": {
+            "main": [
+                [
+                    {
+                        "node": "Build RAG Context",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Tavily Search": {
+            "main": [
+                [
+                    {
+                        "node": "Build Web Context",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build RAG Context": {
+            "main": [
+                [
+                    {
+                        "node": "Build Prompt",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build Web Context": {
+            "main": [
+                [
+                    {
+                        "node": "Build Prompt",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build Prompt": {
+            "main": [
+                [
+                    {
+                        "node": "Ollama Chat",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Ollama Chat": {
+            "main": [
+                [
+                    {
+                        "node": "Extract Answer",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Extract Answer": {
+            "main": [
+                [
+                    {
+                        "node": "Telegram Send Answer",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get File Path": {
+            "main": [
+                [
+                    {
+                        "node": "Download File",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Download File": {
+            "main": [
+                [
+                    {
+                        "node": "Split Text",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Split Text": {
+            "main": [
+                [
+                    {
+                        "node": "Embed Chunk",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Embed Chunk": {
+            "main": [
+                [
+                    {
+                        "node": "Upsert Chunk",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Upsert Chunk": {
+            "main": [
+                [
+                    {
+                        "node": "Notify Progress",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}
