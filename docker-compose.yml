@@ -148,45 +148,33 @@ services:
         until pg_isready -h supabase-db -p 5432 -U "$${SUPABASE_DB_USER}" -d "$${SUPABASE_DB_NAME}"; do
           sleep 2
         done
-        psql "$$DB_URL" -v ON_ERROR_STOP=1 <<SQL
+        psql "$$DB_URL" -v ON_ERROR_STOP=1 -v db_pass="$${SUPABASE_DB_PASSWORD}" <<'SQL'
         create extension if not exists pgcrypto;
         create extension if not exists vector;
 
-        do $$
-        begin
-          if not exists (select 1 from pg_roles where rolname = 'anon') then
-            create role anon nologin noinherit;
-          end if;
-          if not exists (select 1 from pg_roles where rolname = 'authenticated') then
-            create role authenticated nologin noinherit;
-          end if;
-          if not exists (select 1 from pg_roles where rolname = 'service_role') then
-            create role service_role nologin noinherit bypassrls;
-          end if;
+        select 'create role anon nologin noinherit'
+        where not exists (select 1 from pg_roles where rolname = 'anon') \gexec
+        select 'create role authenticated nologin noinherit'
+        where not exists (select 1 from pg_roles where rolname = 'authenticated') \gexec
+        select 'create role service_role nologin noinherit bypassrls'
+        where not exists (select 1 from pg_roles where rolname = 'service_role') \gexec
 
-          if not exists (select 1 from pg_roles where rolname = 'authenticator') then
-            create role authenticator login noinherit;
-          end if;
-          if not exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') then
-            create role supabase_auth_admin login noinherit createrole;
-          end if;
-          if not exists (select 1 from pg_roles where rolname = 'supabase_storage_admin') then
-            create role supabase_storage_admin login noinherit createrole;
-          end if;
-          if not exists (select 1 from pg_roles where rolname = 'supabase_admin') then
-            create role supabase_admin login noinherit createrole createdb;
-          end if;
-          if not exists (select 1 from pg_roles where rolname = 'dashboard_user') then
-            create role dashboard_user login noinherit;
-          end if;
-        end
-        $$;
+        select 'create role authenticator login noinherit'
+        where not exists (select 1 from pg_roles where rolname = 'authenticator') \gexec
+        select 'create role supabase_auth_admin login noinherit createrole'
+        where not exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') \gexec
+        select 'create role supabase_storage_admin login noinherit createrole'
+        where not exists (select 1 from pg_roles where rolname = 'supabase_storage_admin') \gexec
+        select 'create role supabase_admin login noinherit createrole createdb'
+        where not exists (select 1 from pg_roles where rolname = 'supabase_admin') \gexec
+        select 'create role dashboard_user login noinherit'
+        where not exists (select 1 from pg_roles where rolname = 'dashboard_user') \gexec
 
-        alter role authenticator with password '$${SUPABASE_DB_PASSWORD}';
-        alter role supabase_auth_admin with password '$${SUPABASE_DB_PASSWORD}';
-        alter role supabase_storage_admin with password '$${SUPABASE_DB_PASSWORD}';
-        alter role supabase_admin with password '$${SUPABASE_DB_PASSWORD}';
-        alter role dashboard_user with password '$${SUPABASE_DB_PASSWORD}';
+        select format('alter role authenticator with password %L', :'db_pass') \gexec
+        select format('alter role supabase_auth_admin with password %L', :'db_pass') \gexec
+        select format('alter role supabase_storage_admin with password %L', :'db_pass') \gexec
+        select format('alter role supabase_admin with password %L', :'db_pass') \gexec
+        select format('alter role dashboard_user with password %L', :'db_pass') \gexec
 
         grant anon, authenticated, service_role to authenticator;
 
