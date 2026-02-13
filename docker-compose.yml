@@ -116,7 +116,6 @@ services:
       - POSTGRES_PASSWORD=${SUPABASE_DB_PASSWORD:-change-me-strong-password}
     volumes:
       - ./supabase/db/data:/var/lib/postgresql/data
-      - ./supabase/db/init:/docker-entrypoint-initdb.d:ro
     ports:
       - "54322:5432"
     networks:
@@ -128,13 +127,93 @@ services:
       retries: 30
       start_period: 30s
 
+  # Idempotent DB bootstrap that runs on every `docker compose up -d`.
+  # This avoids manual fixes when DB already exists or when host line-endings differ.
+  supabase-db-init:
+    image: postgres:15-alpine
+    container_name: supabase-db-init
+    restart: "no"
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      - SUPABASE_DB_NAME=${SUPABASE_DB_NAME:-postgres}
+      - SUPABASE_DB_USER=${SUPABASE_DB_USER:-postgres}
+      - SUPABASE_DB_PASSWORD=${SUPABASE_DB_PASSWORD:-change-me-strong-password}
+    command:
+      - sh
+      - -ec
+      - |
+        until pg_isready -h supabase-db -p 5432 -U "$${SUPABASE_DB_USER}" -d "$${SUPABASE_DB_NAME}"; do
+          sleep 2
+        done
+        psql "postgresql://$${SUPABASE_DB_USER}:$${SUPABASE_DB_PASSWORD}@supabase-db:5432/$${SUPABASE_DB_NAME}" -v ON_ERROR_STOP=1 -v db_pass="$${SUPABASE_DB_PASSWORD}" <<'SQL'
+        create extension if not exists pgcrypto;
+        create extension if not exists vector;
+
+        do $$
+        begin
+          if not exists (select 1 from pg_roles where rolname = 'anon') then
+            create role anon nologin noinherit;
+          end if;
+          if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+            create role authenticated nologin noinherit;
+          end if;
+          if not exists (select 1 from pg_roles where rolname = 'service_role') then
+            create role service_role nologin noinherit bypassrls;
+          end if;
+
+          if not exists (select 1 from pg_roles where rolname = 'authenticator') then
+            execute format('create role authenticator login noinherit password %L', :'db_pass');
+          else
+            execute format('alter role authenticator with login password %L', :'db_pass');
+          end if;
+          if not exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') then
+            execute format('create role supabase_auth_admin login noinherit createrole password %L', :'db_pass');
+          else
+            execute format('alter role supabase_auth_admin with login password %L', :'db_pass');
+          end if;
+          if not exists (select 1 from pg_roles where rolname = 'supabase_storage_admin') then
+            execute format('create role supabase_storage_admin login noinherit createrole password %L', :'db_pass');
+          else
+            execute format('alter role supabase_storage_admin with login password %L', :'db_pass');
+          end if;
+          if not exists (select 1 from pg_roles where rolname = 'supabase_admin') then
+            execute format('create role supabase_admin login noinherit createrole createdb password %L', :'db_pass');
+          else
+            execute format('alter role supabase_admin with login password %L', :'db_pass');
+          end if;
+          if not exists (select 1 from pg_roles where rolname = 'dashboard_user') then
+            execute format('create role dashboard_user login noinherit password %L', :'db_pass');
+          else
+            execute format('alter role dashboard_user with login password %L', :'db_pass');
+          end if;
+        end
+        $$;
+
+        grant anon, authenticated, service_role to authenticator;
+
+        create schema if not exists auth;
+        create schema if not exists storage;
+        create schema if not exists graphql_public;
+        create schema if not exists realtime;
+        create schema if not exists _realtime;
+        create schema if not exists supabase_functions;
+
+        grant usage on schema public to anon, authenticated, service_role;
+        grant usage on schema storage to anon, authenticated, service_role;
+        grant usage on schema graphql_public to anon, authenticated, service_role;
+        SQL
+    networks:
+      - ai-agent-net
+
   supabase-auth:
     image: supabase/gotrue:v2.185.0
     container_name: supabase-auth
     restart: unless-stopped
     depends_on:
-      supabase-db:
-        condition: service_healthy
+      supabase-db-init:
+        condition: service_completed_successfully
     environment:
       - API_EXTERNAL_URL=${SUPABASE_PUBLIC_URL:-http://localhost:8000}
       - GOTRUE_API_HOST=0.0.0.0
@@ -165,8 +244,8 @@ services:
     container_name: supabase-rest
     restart: unless-stopped
     depends_on:
-      supabase-db:
-        condition: service_healthy
+      supabase-db-init:
+        condition: service_completed_successfully
     environment:
       - PGRST_DB_URI=postgres://authenticator:${SUPABASE_DB_PASSWORD:-change-me-strong-password}@supabase-db:5432/${SUPABASE_DB_NAME:-postgres}
       - PGRST_DB_SCHEMAS=public,storage,graphql_public
@@ -183,8 +262,8 @@ services:
     container_name: supabase-realtime
     restart: unless-stopped
     depends_on:
-      supabase-db:
-        condition: service_healthy
+      supabase-db-init:
+        condition: service_completed_successfully
     environment:
       - PORT=4000
       - DB_HOST=supabase-db
@@ -205,8 +284,8 @@ services:
     container_name: supabase-storage
     restart: unless-stopped
     depends_on:
-      supabase-db:
-        condition: service_healthy
+      supabase-db-init:
+        condition: service_completed_successfully
       supabase-rest:
         condition: service_started
       supabase-imgproxy:
@@ -245,8 +324,8 @@ services:
     container_name: supabase-meta
     restart: unless-stopped
     depends_on:
-      supabase-db:
-        condition: service_healthy
+      supabase-db-init:
+        condition: service_completed_successfully
     environment:
       - PG_META_PORT=8080
       - PG_META_DB_HOST=supabase-db
