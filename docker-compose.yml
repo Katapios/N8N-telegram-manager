@@ -144,10 +144,11 @@ services:
       - sh
       - -ec
       - |
+        DB_URL="postgresql://$${SUPABASE_DB_USER}:$${SUPABASE_DB_PASSWORD}@supabase-db:5432/$${SUPABASE_DB_NAME}"
         until pg_isready -h supabase-db -p 5432 -U "$${SUPABASE_DB_USER}" -d "$${SUPABASE_DB_NAME}"; do
           sleep 2
         done
-        psql "postgresql://$${SUPABASE_DB_USER}:$${SUPABASE_DB_PASSWORD}@supabase-db:5432/$${SUPABASE_DB_NAME}" -v ON_ERROR_STOP=1 -v db_pass="$${SUPABASE_DB_PASSWORD}" <<'SQL'
+        psql "$$DB_URL" -v ON_ERROR_STOP=1 <<SQL
         create extension if not exists pgcrypto;
         create extension if not exists vector;
 
@@ -164,32 +165,28 @@ services:
           end if;
 
           if not exists (select 1 from pg_roles where rolname = 'authenticator') then
-            execute format('create role authenticator login noinherit password %L', :'db_pass');
-          else
-            execute format('alter role authenticator with login password %L', :'db_pass');
+            create role authenticator login noinherit;
           end if;
           if not exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') then
-            execute format('create role supabase_auth_admin login noinherit createrole password %L', :'db_pass');
-          else
-            execute format('alter role supabase_auth_admin with login password %L', :'db_pass');
+            create role supabase_auth_admin login noinherit createrole;
           end if;
           if not exists (select 1 from pg_roles where rolname = 'supabase_storage_admin') then
-            execute format('create role supabase_storage_admin login noinherit createrole password %L', :'db_pass');
-          else
-            execute format('alter role supabase_storage_admin with login password %L', :'db_pass');
+            create role supabase_storage_admin login noinherit createrole;
           end if;
           if not exists (select 1 from pg_roles where rolname = 'supabase_admin') then
-            execute format('create role supabase_admin login noinherit createrole createdb password %L', :'db_pass');
-          else
-            execute format('alter role supabase_admin with login password %L', :'db_pass');
+            create role supabase_admin login noinherit createrole createdb;
           end if;
           if not exists (select 1 from pg_roles where rolname = 'dashboard_user') then
-            execute format('create role dashboard_user login noinherit password %L', :'db_pass');
-          else
-            execute format('alter role dashboard_user with login password %L', :'db_pass');
+            create role dashboard_user login noinherit;
           end if;
         end
         $$;
+
+        alter role authenticator with password '$${SUPABASE_DB_PASSWORD}';
+        alter role supabase_auth_admin with password '$${SUPABASE_DB_PASSWORD}';
+        alter role supabase_storage_admin with password '$${SUPABASE_DB_PASSWORD}';
+        alter role supabase_admin with password '$${SUPABASE_DB_PASSWORD}';
+        alter role dashboard_user with password '$${SUPABASE_DB_PASSWORD}';
 
         grant anon, authenticated, service_role to authenticator;
 
