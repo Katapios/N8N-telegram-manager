@@ -130,7 +130,7 @@ services:
       retries: 10
 
   supabase-auth:
-    image: supabase/gotrue:latest
+    image: supabase/gotrue:v2.185.0
     container_name: supabase-auth
     restart: unless-stopped
     depends_on:
@@ -162,7 +162,7 @@ services:
       - ai-agent-net
 
   supabase-rest:
-    image: postgrest/postgrest:latest
+    image: postgrest/postgrest:v14.3
     container_name: supabase-rest
     restart: unless-stopped
     depends_on:
@@ -180,7 +180,7 @@ services:
       - ai-agent-net
 
   supabase-realtime:
-    image: supabase/realtime:latest
+    image: supabase/realtime:v2.72.0
     container_name: supabase-realtime
     restart: unless-stopped
     depends_on:
@@ -202,7 +202,7 @@ services:
       - ai-agent-net
 
   supabase-storage:
-    image: supabase/storage-api:latest
+    image: supabase/storage-api:v1.37.1
     container_name: supabase-storage
     restart: unless-stopped
     depends_on:
@@ -232,7 +232,7 @@ services:
       - ai-agent-net
 
   supabase-imgproxy:
-    image: darthsim/imgproxy:latest
+    image: darthsim/imgproxy:v3.30.1
     container_name: supabase-imgproxy
     restart: unless-stopped
     environment:
@@ -242,7 +242,7 @@ services:
       - ai-agent-net
 
   supabase-meta:
-    image: supabase/postgres-meta:latest
+    image: supabase/postgres-meta:v0.95.2
     container_name: supabase-meta
     restart: unless-stopped
     depends_on:
@@ -259,7 +259,7 @@ services:
       - ai-agent-net
 
   supabase-functions:
-    image: supabase/edge-runtime:latest
+    image: supabase/edge-runtime:v1.70.0
     container_name: supabase-functions
     restart: unless-stopped
     environment:
@@ -306,7 +306,7 @@ services:
       - ai-agent-net
 
   supabase-studio:
-    image: supabase/studio:latest
+    image: supabase/studio:2026.01.27-sha-6aa59ff
     container_name: supabase-studio
     restart: unless-stopped
     depends_on:
