@@ -125,9 +125,10 @@ services:
       - ai-agent-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${SUPABASE_DB_USER:-postgres} -d ${SUPABASE_DB_NAME:-postgres}"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 30
+      start_period: 30s
 
   supabase-auth:
     image: supabase/gotrue:v2.185.0
