@@ -185,6 +185,12 @@ services:
         create schema if not exists _realtime;
         create schema if not exists supabase_functions;
 
+        alter role supabase_auth_admin set search_path = auth, public;
+        alter role supabase_storage_admin set search_path = storage, public;
+        grant usage, create on schema auth to supabase_auth_admin;
+        grant usage, create on schema storage to supabase_storage_admin;
+        grant usage on schema public to supabase_auth_admin, supabase_storage_admin, supabase_admin;
+
         grant usage on schema public to anon, authenticated, service_role;
         grant usage on schema storage to anon, authenticated, service_role;
         grant usage on schema graphql_public to anon, authenticated, service_role;
@@ -204,6 +210,7 @@ services:
       - GOTRUE_API_HOST=0.0.0.0
       - GOTRUE_API_PORT=9999
       - GOTRUE_DB_DRIVER=postgres
+      - GOTRUE_DB_NAMESPACE=auth
       - GOTRUE_DB_DATABASE_URL=postgres://supabase_auth_admin:${SUPABASE_DB_PASSWORD:-change-me-strong-password}@supabase-db:5432/${SUPABASE_DB_NAME:-postgres}?search_path=auth
       - GOTRUE_SITE_URL=${SUPABASE_SITE_URL:-http://localhost:3000}
       - GOTRUE_URI_ALLOW_LIST=${SUPABASE_ADDITIONAL_REDIRECT_URLS:-}
