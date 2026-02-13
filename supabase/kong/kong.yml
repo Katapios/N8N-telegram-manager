@@ -1,0 +1,51 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: auth-v1
+    url: http://supabase-auth:9999/
+    routes:
+      - name: auth-v1-route
+        paths:
+          - /auth/v1/
+        strip_path: true
+
+  - name: rest-v1
+    url: http://supabase-rest:3000/
+    routes:
+      - name: rest-v1-route
+        paths:
+          - /rest/v1/
+        strip_path: true
+
+  - name: realtime-v1
+    url: http://supabase-realtime:4000/
+    routes:
+      - name: realtime-v1-route
+        paths:
+          - /realtime/v1/
+        strip_path: true
+
+  - name: storage-v1
+    url: http://supabase-storage:5000/
+    routes:
+      - name: storage-v1-route
+        paths:
+          - /storage/v1/
+        strip_path: true
+
+  - name: meta
+    url: http://supabase-meta:8080/
+    routes:
+      - name: meta-route
+        paths:
+          - /pgmeta/
+        strip_path: true
+
+  - name: functions-v1
+    url: http://supabase-functions:9000/
+    routes:
+      - name: functions-v1-route
+        paths:
+          - /functions/v1/
+        strip_path: true

@@ -107,6 +107,228 @@ services:
           cpus: '0.5'
           memory: '512M'
 
+  # Self-hosted Supabase foundation (step 1): Postgres + pgvector.
+  supabase-db:
+    image: pgvector/pgvector:pg15
+    container_name: supabase-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${SUPABASE_DB_NAME:-postgres}
+      - POSTGRES_USER=${SUPABASE_DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${SUPABASE_DB_PASSWORD:-change-me-strong-password}
+    volumes:
+      - ./supabase/db/data:/var/lib/postgresql/data
+      - ./supabase/db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "54322:5432"
+    networks:
+      - ai-agent-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SUPABASE_DB_USER:-postgres} -d ${SUPABASE_DB_NAME:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  supabase-auth:
+    image: supabase/gotrue:latest
+    container_name: supabase-auth
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      - API_EXTERNAL_URL=${SUPABASE_PUBLIC_URL:-http://localhost:8000}
+      - GOTRUE_API_HOST=0.0.0.0
+      - GOTRUE_API_PORT=9999
+      - GOTRUE_DB_DRIVER=postgres
+      - GOTRUE_DB_DATABASE_URL=postgres://supabase_auth_admin:${SUPABASE_DB_PASSWORD:-change-me-strong-password}@supabase-db:5432/${SUPABASE_DB_NAME:-postgres}?search_path=auth
+      - GOTRUE_SITE_URL=${SUPABASE_SITE_URL:-http://localhost:3000}
+      - GOTRUE_URI_ALLOW_LIST=${SUPABASE_ADDITIONAL_REDIRECT_URLS:-}
+      - GOTRUE_DISABLE_SIGNUP=${SUPABASE_DISABLE_SIGNUP:-false}
+      - GOTRUE_JWT_ADMIN_ROLES=service_role
+      - GOTRUE_JWT_AUD=authenticated
+      - GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated
+      - GOTRUE_JWT_EXP=${SUPABASE_JWT_EXP:-3600}
+      - GOTRUE_JWT_SECRET=${SUPABASE_JWT_SECRET:-replace-with-very-long-random-jwt-secret-at-least-32-chars}
+      - GOTRUE_EXTERNAL_EMAIL_ENABLED=true
+      - GOTRUE_MAILER_AUTOCONFIRM=${SUPABASE_MAILER_AUTOCONFIRM:-true}
+      - GOTRUE_SMTP_HOST=${SUPABASE_SMTP_HOST:-}
+      - GOTRUE_SMTP_PORT=${SUPABASE_SMTP_PORT:-587}
+      - GOTRUE_SMTP_USER=${SUPABASE_SMTP_USER:-}
+      - GOTRUE_SMTP_PASS=${SUPABASE_SMTP_PASS:-}
+      - GOTRUE_SMTP_ADMIN_EMAIL=${SUPABASE_SMTP_ADMIN_EMAIL:-}
+      - GOTRUE_SMTP_SENDER_NAME=${SUPABASE_SMTP_SENDER_NAME:-LazyBones}
+    networks:
+      - ai-agent-net
+
+  supabase-rest:
+    image: postgrest/postgrest:latest
+    container_name: supabase-rest
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      - PGRST_DB_URI=postgres://authenticator:${SUPABASE_DB_PASSWORD:-change-me-strong-password}@supabase-db:5432/${SUPABASE_DB_NAME:-postgres}
+      - PGRST_DB_SCHEMAS=public,storage,graphql_public
+      - PGRST_DB_ANON_ROLE=anon
+      - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-replace-with-very-long-random-jwt-secret-at-least-32-chars}
+      - PGRST_DB_USE_LEGACY_GUCS=false
+      - PGRST_APP_SETTINGS_JWT_SECRET=${SUPABASE_JWT_SECRET:-replace-with-very-long-random-jwt-secret-at-least-32-chars}
+      - PGRST_APP_SETTINGS_JWT_EXP=${SUPABASE_JWT_EXP:-3600}
+    networks:
+      - ai-agent-net
+
+  supabase-realtime:
+    image: supabase/realtime:latest
+    container_name: supabase-realtime
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      - PORT=4000
+      - DB_HOST=supabase-db
+      - DB_PORT=5432
+      - DB_NAME=${SUPABASE_DB_NAME:-postgres}
+      - DB_USER=supabase_admin
+      - DB_PASSWORD=${SUPABASE_DB_PASSWORD:-change-me-strong-password}
+      - DB_AFTER_CONNECT_QUERY=SET search_path TO _realtime
+      - API_JWT_SECRET=${SUPABASE_JWT_SECRET:-replace-with-very-long-random-jwt-secret-at-least-32-chars}
+      - SECRET_KEY_BASE=${SUPABASE_SECRET_KEY_BASE:-replace-with-long-random-secret-key-base}
+      - ERL_AFLAGS=-proto_dist inet_tcp
+      - SEED_SELF_HOST=true
+    networks:
+      - ai-agent-net
+
+  supabase-storage:
+    image: supabase/storage-api:latest
+    container_name: supabase-storage
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      supabase-rest:
+        condition: service_started
+      supabase-imgproxy:
+        condition: service_started
+    environment:
+      - ANON_KEY=${SUPABASE_ANON_KEY:-replace-with-actual-anon-jwt}
+      - SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-replace-with-actual-service-role-jwt}
+      - POSTGREST_URL=http://supabase-rest:3000
+      - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-replace-with-very-long-random-jwt-secret-at-least-32-chars}
+      - DATABASE_URL=postgres://supabase_storage_admin:${SUPABASE_DB_PASSWORD:-change-me-strong-password}@supabase-db:5432/${SUPABASE_DB_NAME:-postgres}
+      - FILE_SIZE_LIMIT=${SUPABASE_STORAGE_FILE_SIZE_LIMIT:-52428800}
+      - STORAGE_BACKEND=file
+      - FILE_STORAGE_BACKEND_PATH=/var/lib/storage
+      - TENANT_ID=stub
+      - REGION=stub
+      - GLOBAL_S3_BUCKET=stub
+      - ENABLE_IMAGE_TRANSFORMATION=true
+      - IMGPROXY_URL=http://supabase-imgproxy:5001
+    volumes:
+      - ./supabase/storage:/var/lib/storage
+    networks:
+      - ai-agent-net
+
+  supabase-imgproxy:
+    image: darthsim/imgproxy:latest
+    container_name: supabase-imgproxy
+    restart: unless-stopped
+    environment:
+      - IMGPROXY_BIND=0.0.0.0:5001
+      - IMGPROXY_ENABLE_WEBP_DETECTION=true
+    networks:
+      - ai-agent-net
+
+  supabase-meta:
+    image: supabase/postgres-meta:latest
+    container_name: supabase-meta
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      - PG_META_PORT=8080
+      - PG_META_DB_HOST=supabase-db
+      - PG_META_DB_PORT=5432
+      - PG_META_DB_NAME=${SUPABASE_DB_NAME:-postgres}
+      - PG_META_DB_USER=${SUPABASE_DB_USER:-postgres}
+      - PG_META_DB_PASSWORD=${SUPABASE_DB_PASSWORD:-change-me-strong-password}
+    networks:
+      - ai-agent-net
+
+  supabase-functions:
+    image: supabase/edge-runtime:latest
+    container_name: supabase-functions
+    restart: unless-stopped
+    environment:
+      - JWT_SECRET=${SUPABASE_JWT_SECRET:-replace-with-very-long-random-jwt-secret-at-least-32-chars}
+      - SUPABASE_URL=http://supabase-kong:8000
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-replace-with-actual-anon-jwt}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-replace-with-actual-service-role-jwt}
+      - VERIFY_JWT=${SUPABASE_FUNCTIONS_VERIFY_JWT:-false}
+    command:
+      - start
+      - --main-service
+      - /home/deno/functions/main
+    volumes:
+      - ./supabase/functions:/home/deno/functions:ro
+    networks:
+      - ai-agent-net
+
+  supabase-kong:
+    image: kong:2.8.1
+    container_name: supabase-kong
+    restart: unless-stopped
+    depends_on:
+      - supabase-auth
+      - supabase-rest
+      - supabase-realtime
+      - supabase-storage
+      - supabase-meta
+      - supabase-functions
+    environment:
+      - KONG_DATABASE=off
+      - KONG_DECLARATIVE_CONFIG=/home/kong/kong.yml
+      - KONG_DNS_ORDER=LAST,A,CNAME
+      - KONG_PLUGINS=request-transformer,cors,key-auth,acl,basic-auth
+      - KONG_PROXY_ACCESS_LOG=/dev/stdout
+      - KONG_ADMIN_ACCESS_LOG=/dev/stdout
+      - KONG_PROXY_ERROR_LOG=/dev/stderr
+      - KONG_ADMIN_ERROR_LOG=/dev/stderr
+      - KONG_ADMIN_LISTEN=0.0.0.0:8001
+    volumes:
+      - ./supabase/kong/kong.yml:/home/kong/kong.yml:ro
+    ports:
+      - "8000:8000"
+    networks:
+      - ai-agent-net
+
+  supabase-studio:
+    image: supabase/studio:latest
+    container_name: supabase-studio
+    restart: unless-stopped
+    depends_on:
+      - supabase-meta
+      - supabase-kong
+    environment:
+      - STUDIO_PG_META_URL=http://supabase-meta:8080
+      - POSTGRES_PASSWORD=${SUPABASE_DB_PASSWORD:-change-me-strong-password}
+      - DEFAULT_ORGANIZATION=${SUPABASE_STUDIO_DEFAULT_ORG:-LazyBones}
+      - DEFAULT_PROJECT=${SUPABASE_STUDIO_DEFAULT_PROJECT:-LazyBones Local}
+      - SUPABASE_URL=http://supabase-kong:8000
+      - SUPABASE_PUBLIC_URL=${SUPABASE_PUBLIC_URL:-http://localhost:8000}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-replace-with-actual-anon-jwt}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-replace-with-actual-service-role-jwt}
+      - LOGFLARE_API_KEY=${SUPABASE_LOGFLARE_API_KEY:-}
+      - LOGFLARE_URL=${SUPABASE_LOGFLARE_URL:-}
+      - NEXT_PUBLIC_ENABLE_LOGS=true
+    ports:
+      - "3000:3000"
+    networks:
+      - ai-agent-net
+
 networks:
   ai-agent-net:
     driver: bridge
