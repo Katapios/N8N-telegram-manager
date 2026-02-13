@@ -99,8 +99,6 @@ services:
       - "./vector-store/data:/chroma/chroma"
     networks:
       - ai-agent-net
-    ports: # Exposing is optional, useful for local debugging
-      - "8000:8000"
     deploy:
       resources:
         limits:
