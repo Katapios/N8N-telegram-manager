@@ -864,7 +864,7 @@
       "main": [
         [
           {
-            "node": "Extract Chunk Embedding",
+            "node": "OpenAI Embed Chunk",
             "type": "main",
             "index": 0
           }
