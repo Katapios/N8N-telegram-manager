@@ -230,8 +230,8 @@ services:
         create index if not exists report_insights_user_date_idx
           on public.report_insights (user_id, report_date desc);
 
-        grant select, insert, update, delete on public.reports to authenticated, service_role;
-        grant select, insert, update, delete on public.report_insights to authenticated, service_role;
+        grant select, insert, update, delete on public.reports to anon, authenticated, service_role;
+        grant select, insert, update, delete on public.report_insights to anon, authenticated, service_role;
         SQL
     networks:
       - ai-agent-net

@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const body = $json.body || {};\nconst headers = $json.headers || {};\nconst expectedKey = $env.LAZYBONES_WEBHOOK_KEY || '';\nconst providedKey = headers['x-api-key'] || headers['X-API-Key'] || headers['x-api_key'] || '';\n\nconst authorized = !expectedKey || providedKey === expectedKey;\n\nconst actionRaw = (body.action || '').toString().trim().toLowerCase();\nconst allowed = ['save_report', 'get_reports', 'daily_summary'];\nconst action = allowed.includes(actionRaw) ? actionRaw : 'unknown';\n\nconst userId = (body.user_id || '').toString().trim();\nconst reportType = (body.report_type || 'daily').toString().trim();\nconst reportDate = (body.report_date || new Date().toISOString().slice(0, 10)).toString().trim();\nconst reportPayload = body.report_payload || {};\nconst chatId = body.telegram_chat_id ? String(body.telegram_chat_id).trim() : '';\nconst limit = Number(body.limit || 20);\n\nreturn [{\n  authorized,\n  action,\n  userId,\n  reportType,\n  reportDate,\n  reportPayload,\n  chatId,\n  limit: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 100) : 20,\n  hasUserId: userId.length > 0,\n  error: authorized ? '' : 'Unauthorized: invalid x-api-key'\n}];"
+        "functionCode": "const body = $json.body || {};\nconst headers = $json.headers || {};\nconst expectedKey = $env.LAZYBONES_WEBHOOK_KEY || '';\nconst providedKey = headers['x-api-key'] || headers['X-API-Key'] || headers['x-api_key'] || '';\nconst supabaseServiceKey = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\n\nconst authorized = !expectedKey || providedKey === expectedKey;\n\nconst actionRaw = (body.action || '').toString().trim().toLowerCase();\nconst allowed = ['save_report', 'get_reports', 'daily_summary'];\nconst action = allowed.includes(actionRaw) ? actionRaw : 'unknown';\n\nconst userId = (body.user_id || '').toString().trim();\nconst reportType = (body.report_type || 'daily').toString().trim();\nconst reportDate = (body.report_date || new Date().toISOString().slice(0, 10)).toString().trim();\nconst reportPayload = body.report_payload || {};\nconst chatId = body.telegram_chat_id ? String(body.telegram_chat_id).trim() : '';\nconst limit = Number(body.limit || 20);\n\nreturn [{\n  authorized,\n  action,\n  userId,\n  reportType,\n  reportDate,\n  reportPayload,\n  chatId,\n  supabaseServiceKey,\n  limit: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 100) : 20,\n  hasUserId: userId.length > 0,\n  error: authorized ? '' : 'Unauthorized: invalid x-api-key'\n}];"
       },
       "name": "Parse Request",
       "type": "n8n-nodes-base.function",
@@ -118,11 +118,11 @@
         "headerParameters": [
           {
             "name": "apikey",
-            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) }}"
+            "value": "={{ $json.supabaseServiceKey }}"
           },
           {
             "name": "Authorization",
-            "value": "={{ 'Bearer ' + (($env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) }}"
+            "value": "={{ 'Bearer ' + $json.supabaseServiceKey }}"
           },
           {
             "name": "Prefer",
@@ -164,11 +164,11 @@
         "headerParameters": [
           {
             "name": "apikey",
-            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) }}"
+            "value": "={{ $json.supabaseServiceKey }}"
           },
           {
             "name": "Authorization",
-            "value": "={{ 'Bearer ' + (($env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) }}"
+            "value": "={{ 'Bearer ' + $json.supabaseServiceKey }}"
           }
         ]
       },
@@ -237,11 +237,11 @@
         "headerParameters": [
           {
             "name": "apikey",
-            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) }}"
+            "value": "={{ $json.supabaseServiceKey }}"
           },
           {
             "name": "Authorization",
-            "value": "={{ 'Bearer ' + (($env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) }}"
+            "value": "={{ 'Bearer ' + $json.supabaseServiceKey }}"
           },
           {
             "name": "Prefer",
