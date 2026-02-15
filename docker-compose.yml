@@ -197,6 +197,38 @@ services:
         grant usage on schema public to anon, authenticated, service_role;
         grant usage on schema storage to anon, authenticated, service_role;
         grant usage on schema graphql_public to anon, authenticated, service_role;
+
+        create table if not exists public.reports (
+          id uuid primary key default gen_random_uuid(),
+          user_id text not null,
+          report_type text not null default 'daily',
+          report_date date not null,
+          payload jsonb not null default '{}'::jsonb,
+          source text not null default 'mobile_app',
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        );
+
+        create index if not exists reports_user_date_idx
+          on public.reports (user_id, report_date desc);
+        create index if not exists reports_type_idx
+          on public.reports (report_type);
+
+        create table if not exists public.report_insights (
+          id uuid primary key default gen_random_uuid(),
+          user_id text not null,
+          report_date date not null,
+          insight_type text not null,
+          summary text not null,
+          meta jsonb not null default '{}'::jsonb,
+          created_at timestamptz not null default now()
+        );
+
+        create index if not exists report_insights_user_date_idx
+          on public.report_insights (user_id, report_date desc);
+
+        grant select, insert, update, delete on public.reports to authenticated, service_role;
+        grant select, insert, update, delete on public.report_insights to authenticated, service_role;
         SQL
     networks:
       - ai-agent-net
