@@ -118,11 +118,11 @@
         "headerParameters": [
           {
             "name": "apikey",
-            "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) }}"
           },
           {
             "name": "Authorization",
-            "value": "={{ 'Bearer ' + $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            "value": "={{ 'Bearer ' + (($env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) }}"
           },
           {
             "name": "Prefer",
@@ -164,11 +164,11 @@
         "headerParameters": [
           {
             "name": "apikey",
-            "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) }}"
           },
           {
             "name": "Authorization",
-            "value": "={{ 'Bearer ' + $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            "value": "={{ 'Bearer ' + (($env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) }}"
           }
         ]
       },
@@ -237,11 +237,11 @@
         "headerParameters": [
           {
             "name": "apikey",
-            "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) }}"
           },
           {
             "name": "Authorization",
-            "value": "={{ 'Bearer ' + $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            "value": "={{ 'Bearer ' + (($env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) }}"
           },
           {
             "name": "Prefer",
