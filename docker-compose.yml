@@ -292,6 +292,7 @@ services:
       supabase-db-init:
         condition: service_completed_successfully
     environment:
+      - APP_NAME=${SUPABASE_REALTIME_APP_NAME:-realtime}
       - RLIMIT_NOFILE=1048576
       - PORT=4000
       - DB_HOST=supabase-db
