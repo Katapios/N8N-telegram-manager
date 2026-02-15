@@ -190,8 +190,11 @@ services:
 
         alter role supabase_auth_admin set search_path = auth, public;
         alter role supabase_storage_admin set search_path = storage, public;
+        alter role supabase_admin set search_path = _realtime, public;
         grant usage, create on schema auth to supabase_auth_admin;
         grant usage, create on schema storage to supabase_storage_admin;
+        grant usage, create on schema _realtime to supabase_admin;
+        grant usage, create on schema realtime to supabase_admin;
         grant usage on schema public to supabase_auth_admin, supabase_storage_admin, supabase_admin;
 
         grant usage on schema public to anon, authenticated, service_role;
