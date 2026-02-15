@@ -1,0 +1,568 @@
+{
+  "name": "LazyBones AI Cloud",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "lazybones-ai",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -900,
+        260
+      ],
+      "webhookId": "lazybones-ai"
+    },
+    {
+      "parameters": {
+        "functionCode": "const body = $json.body || {};\nconst headers = $json.headers || {};\nconst expectedKey = $env.LAZYBONES_WEBHOOK_KEY || '';\nconst providedKey = headers['x-api-key'] || headers['X-API-Key'] || headers['x-api_key'] || '';\n\nconst authorized = !expectedKey || providedKey === expectedKey;\n\nconst actionRaw = (body.action || '').toString().trim().toLowerCase();\nconst allowed = ['save_report', 'get_reports', 'daily_summary'];\nconst action = allowed.includes(actionRaw) ? actionRaw : 'unknown';\n\nconst userId = (body.user_id || '').toString().trim();\nconst reportType = (body.report_type || 'daily').toString().trim();\nconst reportDate = (body.report_date || new Date().toISOString().slice(0, 10)).toString().trim();\nconst reportPayload = body.report_payload || {};\nconst chatId = body.telegram_chat_id ? String(body.telegram_chat_id).trim() : '';\nconst limit = Number(body.limit || 20);\n\nreturn [{\n  authorized,\n  action,\n  userId,\n  reportType,\n  reportDate,\n  reportPayload,\n  chatId,\n  limit: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 100) : 20,\n  hasUserId: userId.length > 0,\n  error: authorized ? '' : 'Unauthorized: invalid x-api-key'\n}];"
+      },
+      "name": "Parse Request",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.authorized }}",
+              "value2": true
+            }
+          ],
+          "string": []
+        }
+      },
+      "name": "If Authorized",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -500,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "operation": "equal",
+              "value2": "save_report"
+            }
+          ]
+        }
+      },
+      "name": "If Save Report",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -300,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "operation": "equal",
+              "value2": "daily_summary"
+            }
+          ]
+        }
+      },
+      "name": "If Daily Summary",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -100,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "operation": "equal",
+              "value2": "get_reports"
+            }
+          ]
+        }
+      },
+      "name": "If Get Reports",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        100,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/reports' }}",
+        "jsonParameters": true,
+        "options": {},
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + $env.SUPABASE_SERVICE_ROLE_KEY }}"
+          },
+          {
+            "name": "Prefer",
+            "value": "return=representation"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyParametersJson": "={{ JSON.stringify([{\n  user_id: $json.userId,\n  report_type: $json.reportType,\n  report_date: $json.reportDate,\n  payload: $json.reportPayload,\n  source: 'mobile_app'\n}]) }}"
+      },
+      "name": "Insert Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -100,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const r = $('Parse Request').first().json;\nconst payload = r.reportPayload || {};\n\nconst system = 'Ты ассистент продуктивности. Сформируй короткий полезный вывод по отчету пользователя на русском языке. Стиль: конкретно, по делу, без воды. Добавь 2-4 рекомендации и 1 следующий шаг.';\n\nconst prompt = `Пользователь: ${r.userId}\\nДата отчета: ${r.reportDate}\\nТип: ${r.reportType}\\nДанные отчета (JSON):\\n${JSON.stringify(payload, null, 2)}\\n\\nСформируй краткий вывод и рекомендации.`;\n\nreturn [{\n  ...r,\n  system,\n  prompt\n}];"
+      },
+      "name": "Build Save Summary Prompt",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        120,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/reports?select=id,user_id,report_date,report_type,payload,created_at&user_id=eq.' + encodeURIComponent($json.userId) + '&order=report_date.desc&limit=' + $json.limit }}",
+        "jsonParameters": true,
+        "options": {},
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + $env.SUPABASE_SERVICE_ROLE_KEY }}"
+          }
+        ]
+      },
+      "name": "Fetch Reports",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        320,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const req = $('Parse Request').first().json;\nconst reports = Array.isArray($json) ? $json : ($json.data || []);\n\nconst system = 'Ты ассистент продуктивности. На основе набора отчетов сформируй дневной вывод: 1) что получилось, 2) что проседает, 3) 3 конкретных шага на завтра.';\n\nconst prompt = `Пользователь: ${req.userId}\\nВсего отчетов: ${reports.length}\\n\\nОтчеты (JSON):\\n${JSON.stringify(reports, null, 2)}\\n\\nСделай структурированный вывод на русском.`;\n\nreturn [{\n  ...req,\n  reportsCount: reports.length,\n  reports,\n  system,\n  prompt\n}];"
+      },
+      "name": "Build Daily Prompt",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        540,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "={{ ($env.OLLAMA_BASE_URL || 'http://ollama:11434') + '/api/chat' }}",
+        "jsonParameters": true,
+        "options": {},
+        "headerParameters": [
+          {
+            "name": "Authorization",
+            "value": "={{ $env.OLLAMA_API_KEY ? ('Bearer ' + $env.OLLAMA_API_KEY) : '' }}"
+          }
+        ],
+        "bodyParametersJson": "={{ JSON.stringify({\n  model: ($env.OLLAMA_MODEL || 'qwen3-coder:480b-cloud'),\n  stream: false,\n  options: { temperature: 0.2 },\n  messages: [\n    { role: 'system', content: $json.system },\n    { role: 'user', content: $json.prompt }\n  ]\n}) }}"
+      },
+      "name": "Ollama Chat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        760,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const req = $('Build Save Summary Prompt').first()?.json || $('Build Daily Prompt').first()?.json || $('Parse Request').first().json;\nconst resp = $json || {};\n\nlet summary = '';\nif (resp.message && resp.message.content) summary = String(resp.message.content).trim();\nelse if (resp.choices && resp.choices[0]?.message?.content) summary = String(resp.choices[0].message.content).trim();\n\nif (!summary) summary = 'Не удалось сгенерировать summary.';\n\nreturn [{\n  ...req,\n  summary\n}];"
+      },
+      "name": "Extract Summary",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        980,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/report_insights' }}",
+        "jsonParameters": true,
+        "options": {
+          "ignoreResponseCode": true
+        },
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + $env.SUPABASE_SERVICE_ROLE_KEY }}"
+          },
+          {
+            "name": "Prefer",
+            "value": "return=minimal"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyParametersJson": "={{ JSON.stringify([{\n  user_id: $json.userId,\n  report_date: $json.reportDate || new Date().toISOString().slice(0, 10),\n  insight_type: $json.action,\n  summary: $json.summary,\n  meta: { reports_count: $json.reportsCount || 0 }\n}]) }}"
+      },
+      "name": "Save Insight",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.chatId }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "name": "If Has Chat",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "={{ 'https://api.telegram.org/bot' + $env.TELEGRAM_TOKEN + '/sendMessage' }}",
+        "jsonParameters": true,
+        "options": {
+          "ignoreResponseCode": true
+        },
+        "bodyParametersJson": "={{ JSON.stringify({\n  chat_id: $json.chatId,\n  text: $json.summary\n}) }}"
+      },
+      "name": "Telegram Notify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1640,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const req = $('Parse Request').first().json;\nif (!req.authorized) {\n  return [{ errorText: req.error }];\n}\nif (!req.hasUserId) {\n  return [{ errorText: 'Missing required field: user_id' }];\n}\nreturn [{ errorText: `Unsupported action: ${req.action}` }];"
+      },
+      "name": "Build Error Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        120,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $('Parse Request').first().json.chatId }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "name": "If Error Chat",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        340,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "={{ 'https://api.telegram.org/bot' + $env.TELEGRAM_TOKEN + '/sendMessage' }}",
+        "jsonParameters": true,
+        "options": {
+          "ignoreResponseCode": true
+        },
+        "bodyParametersJson": "={{ JSON.stringify({\n  chat_id: $('Parse Request').first().json.chatId,\n  text: $json.errorText\n}) }}"
+      },
+      "name": "Telegram Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        560,
+        620
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Request": {
+      "main": [
+        [
+          {
+            "node": "If Authorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Authorized": {
+      "main": [
+        [
+          {
+            "node": "If Save Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Save Report": {
+      "main": [
+        [
+          {
+            "node": "Insert Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If Daily Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Report": {
+      "main": [
+        [
+          {
+            "node": "Build Save Summary Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Save Summary Prompt": {
+      "main": [
+        [
+          {
+            "node": "Ollama Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Daily Summary": {
+      "main": [
+        [
+          {
+            "node": "Fetch Reports",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If Get Reports",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Reports": {
+      "main": [
+        [
+          {
+            "node": "Build Daily Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Daily Prompt": {
+      "main": [
+        [
+          {
+            "node": "Ollama Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat": {
+      "main": [
+        [
+          {
+            "node": "Extract Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Summary": {
+      "main": [
+        [
+          {
+            "node": "Save Insight",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Insight": {
+      "main": [
+        [
+          {
+            "node": "If Has Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Has Chat": {
+      "main": [
+        [
+          {
+            "node": "Telegram Notify",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "If Get Reports": {
+      "main": [
+        [
+          {
+            "node": "Fetch Reports",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Error Message": {
+      "main": [
+        [
+          {
+            "node": "If Error Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Error Chat": {
+      "main": [
+        [
+          {
+            "node": "Telegram Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "lazybones-cloud-v1",
+  "meta": {
+    "instanceId": "lazybones"
+  }
+}
