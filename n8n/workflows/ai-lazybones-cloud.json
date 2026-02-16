@@ -699,7 +699,7 @@
           },
           {
             "name": "Prefer",
-            "value": "return=minimal"
+            "value": "return=representation"
           },
           {
             "name": "Content-Type",
@@ -733,7 +733,7 @@
           },
           {
             "name": "Prefer",
-            "value": "return=minimal"
+            "value": "return=representation"
           },
           {
             "name": "Content-Type",
@@ -767,7 +767,7 @@
           },
           {
             "name": "Prefer",
-            "value": "return=minimal"
+            "value": "return=representation"
           },
           {
             "name": "Content-Type",
@@ -786,7 +786,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const req = $('Parse Request').first().json;\nconst reports = Array.isArray(req.reports) ? req.reports : [];\nconst tags = Array.isArray(req.tags) ? req.tags : [];\nconst planItems = Array.isArray(req.planItems) ? req.planItems : [];\n\nreturn [{\n  ok: true,\n  action: req.action,\n  user_id: req.userId,\n  counts: {\n    reports: reports.length,\n    tags: tags.length,\n    plan_items: planItems.length,\n  },\n}];"
+        "functionCode": "const req = $('Parse Request').first().json;\n\nfunction collect(nodeName) {\n  const items = $(nodeName).all();\n  const out = [];\n  for (const item of items) {\n    const j = item?.json;\n    if (Array.isArray(j)) { out.push(...j); continue; }\n    if (j && Array.isArray(j.body)) { out.push(...j.body); continue; }\n    if (j && Array.isArray(j.data)) { out.push(...j.data); continue; }\n    if (j && typeof j === 'object' && Object.keys(j).length > 0) { out.push(j); }\n  }\n  return out;\n}\n\nconst savedReports = collect('Fetch Saved Reports');\nconst savedTags = collect('Fetch Saved Tags');\nconst savedPlanItems = collect('Fetch Saved Plan Items');\n\nreturn [{\n  ok: true,\n  action: req.action,\n  user_id: req.userId,\n  requested_counts: {\n    reports: Array.isArray(req.reports) ? req.reports.length : 0,\n    tags: Array.isArray(req.tags) ? req.tags.length : 0,\n    plan_items: Array.isArray(req.planItems) ? req.planItems.length : 0,\n  },\n  saved_counts: {\n    reports: savedReports.length,\n    tags: savedTags.length,\n    plan_items: savedPlanItems.length,\n  },\n}];"
       },
       "name": "Build Save User Data Response",
       "type": "n8n-nodes-base.function",
@@ -794,6 +794,81 @@
       "position": [
         2080,
         660
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/reports?select=id&user_id=eq.' + encodeURIComponent($('Parse Request').first().json.userId || '') }}",
+        "jsonParameters": true,
+        "options": {},
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
+          }
+        ]
+      },
+      "name": "Fetch Saved Reports",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1880,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_tags?select=id&user_id=eq.' + encodeURIComponent($('Parse Request').first().json.userId || '') }}",
+        "jsonParameters": true,
+        "options": {},
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
+          }
+        ]
+      },
+      "name": "Fetch Saved Tags",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        2100,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_plan_items?select=id&user_id=eq.' + encodeURIComponent($('Parse Request').first().json.userId || '') }}",
+        "jsonParameters": true,
+        "options": {},
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
+          }
+        ]
+      },
+      "name": "Fetch Saved Plan Items",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        2320,
+        700
       ]
     }
   ],
@@ -1198,6 +1273,39 @@
       ]
     },
     "Insert Plan Items Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Fetch Saved Reports",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Saved Reports": {
+      "main": [
+        [
+          {
+            "node": "Fetch Saved Tags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Saved Tags": {
+      "main": [
+        [
+          {
+            "node": "Fetch Saved Plan Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Saved Plan Items": {
       "main": [
         [
           {
