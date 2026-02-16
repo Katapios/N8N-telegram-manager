@@ -230,8 +230,32 @@ services:
         create index if not exists report_insights_user_date_idx
           on public.report_insights (user_id, report_date desc);
 
+        create table if not exists public.user_tags (
+          id uuid primary key default gen_random_uuid(),
+          user_id text not null,
+          tag_text text not null,
+          tag_type text not null default 'GOOD',
+          created_at timestamptz not null default now()
+        );
+
+        create index if not exists user_tags_user_created_idx
+          on public.user_tags (user_id, created_at desc);
+
+        create table if not exists public.user_plan_items (
+          id uuid primary key default gen_random_uuid(),
+          user_id text not null,
+          item_text text not null,
+          is_completed boolean not null default false,
+          created_at timestamptz not null default now()
+        );
+
+        create index if not exists user_plan_items_user_created_idx
+          on public.user_plan_items (user_id, created_at asc);
+
         grant select, insert, update, delete on public.reports to anon, authenticated, service_role;
         grant select, insert, update, delete on public.report_insights to anon, authenticated, service_role;
+        grant select, insert, update, delete on public.user_tags to anon, authenticated, service_role;
+        grant select, insert, update, delete on public.user_plan_items to anon, authenticated, service_role;
         SQL
     networks:
       - ai-agent-net

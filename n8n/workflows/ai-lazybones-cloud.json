@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const body = $json.body || {};\nconst headers = $json.headers || {};\nconst expectedKey = $env.LAZYBONES_WEBHOOK_KEY || '';\nconst providedKey = headers['x-api-key'] || headers['X-API-Key'] || headers['x-api_key'] || '';\nconst supabaseServiceKey = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\n\nconst authorized = !expectedKey || providedKey === expectedKey;\n\nconst actionRaw = (body.action || '').toString().trim().toLowerCase();\nconst allowed = ['save_report', 'get_reports', 'daily_summary'];\nconst action = allowed.includes(actionRaw) ? actionRaw : 'unknown';\n\nconst userId = (body.user_id || '').toString().trim();\nconst reportType = (body.report_type || 'daily').toString().trim();\nconst reportDate = (body.report_date || new Date().toISOString().slice(0, 10)).toString().trim();\nconst reportPayload = body.report_payload || {};\nconst chatId = body.telegram_chat_id ? String(body.telegram_chat_id).trim() : '';\nconst limit = Number(body.limit || 20);\n\nreturn [{\n  authorized,\n  action,\n  userId,\n  reportType,\n  reportDate,\n  reportPayload,\n  chatId,\n  supabaseServiceKey,\n  limit: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 100) : 20,\n  hasUserId: userId.length > 0,\n  error: authorized ? '' : 'Unauthorized: invalid x-api-key'\n}];"
+        "functionCode": "const body = $json.body || {};\nconst headers = $json.headers || {};\nconst expectedKey = $env.LAZYBONES_WEBHOOK_KEY || '';\nconst providedKey = headers['x-api-key'] || headers['X-API-Key'] || headers['x-api_key'] || '';\n\nconst authorized = !expectedKey || providedKey === expectedKey;\n\nconst actionRaw = (body.action || '').toString().trim().toLowerCase();\nconst allowed = ['save_report', 'get_reports', 'daily_summary', 'enrich_report_for_telegram', 'auth_sign_in', 'auth_sign_up', 'save_user_data', 'get_user_data'];\nconst requestedAction = allowed.includes(actionRaw) ? actionRaw : 'unknown';\nconst action = requestedAction === 'enrich_report_for_telegram' ? 'daily_summary' : requestedAction;\n\nconst userId = (body.user_id || '').toString().trim();\nconst reportType = (body.report_type || 'daily').toString().trim();\nconst reportDate = (body.report_date || new Date().toISOString().slice(0, 10)).toString().trim();\nconst reportPayload = body.report_payload || {};\nconst chatId = body.telegram_chat_id ? String(body.telegram_chat_id).trim() : '';\nconst limit = Number(body.limit || 20);\nconst email = (body.email || '').toString().trim();\nconst password = (body.password || '').toString();\nconst reports = Array.isArray(body.reports) ? body.reports : [];\nconst tags = Array.isArray(body.tags) ? body.tags : [];\nconst planItems = Array.isArray(body.plan_items) ? body.plan_items : [];\n\nreturn [{\n  authorized,\n  action,\n  requestedAction,\n  userId,\n  reportType,\n  reportDate,\n  reportPayload,\n  chatId,\n  limit: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 500) : 200,\n  hasUserId: userId.length > 0,\n  email,\n  password,\n  reports,\n  tags,\n  planItems,\n  error: authorized ? '' : 'Unauthorized: invalid x-api-key'\n}];"
       },
       "name": "Parse Request",
       "type": "n8n-nodes-base.function",
@@ -118,11 +118,11 @@
         "headerParameters": [
           {
             "name": "apikey",
-            "value": "={{ $json.supabaseServiceKey }}"
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
           },
           {
             "name": "Authorization",
-            "value": "={{ 'Bearer ' + $json.supabaseServiceKey }}"
+            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
           },
           {
             "name": "Prefer",
@@ -164,11 +164,11 @@
         "headerParameters": [
           {
             "name": "apikey",
-            "value": "={{ $json.supabaseServiceKey }}"
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
           },
           {
             "name": "Authorization",
-            "value": "={{ 'Bearer ' + $json.supabaseServiceKey }}"
+            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
           }
         ]
       },
@@ -237,11 +237,11 @@
         "headerParameters": [
           {
             "name": "apikey",
-            "value": "={{ $json.supabaseServiceKey }}"
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
           },
           {
             "name": "Authorization",
-            "value": "={{ 'Bearer ' + $json.supabaseServiceKey }}"
+            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
           },
           {
             "name": "Prefer",
@@ -301,7 +301,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const req = $('Parse Request').first().json;\nif (!req.authorized) {\n  return [{ errorText: req.error }];\n}\nif (!req.hasUserId) {\n  return [{ errorText: 'Missing required field: user_id' }];\n}\nreturn [{ errorText: `Unsupported action: ${req.action}` }];"
+        "functionCode": "const req = $('Parse Request').first().json;\nif (!req.authorized) {\n  return [{ ok: false, error: req.error }];\n}\nif (req.action === 'auth_sign_in' || req.action === 'auth_sign_up') {\n  if (!req.email || !req.password) {\n    return [{ ok: false, error: 'Missing required fields: email, password' }];\n  }\n  return [{ ok: false, error: `Auth action failed: ${req.action}` }];\n}\nif (!req.hasUserId) {\n  return [{ ok: false, error: 'Missing required field: user_id' }];\n}\nreturn [{ ok: false, error: `Unsupported action: ${req.action}` }];"
       },
       "name": "Build Error Message",
       "type": "n8n-nodes-base.function",
@@ -346,6 +346,454 @@
       "position": [
         560,
         620
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "operation": "equal",
+              "value2": "auth_sign_in"
+            }
+          ]
+        }
+      },
+      "name": "If Auth Sign In",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        320,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "operation": "equal",
+              "value2": "auth_sign_up"
+            }
+          ]
+        }
+      },
+      "name": "If Auth Sign Up",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        540,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "={{ ($env.SUPABASE_AUTH_URL || 'http://supabase-auth:9999') + '/token?grant_type=password' }}",
+        "jsonParameters": true,
+        "options": {
+          "ignoreResponseCode": true
+        },
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ $env.SUPABASE_ANON_KEY || '' }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + ($env.SUPABASE_ANON_KEY || '') }}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyParametersJson": "={{ JSON.stringify({ email: $json.email, password: $json.password }) }}"
+      },
+      "name": "Supabase Auth Sign In",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        760,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "={{ ($env.SUPABASE_AUTH_URL || 'http://supabase-auth:9999') + '/signup' }}",
+        "jsonParameters": true,
+        "options": {
+          "ignoreResponseCode": true
+        },
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ $env.SUPABASE_ANON_KEY || '' }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + ($env.SUPABASE_ANON_KEY || '') }}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyParametersJson": "={{ JSON.stringify({ email: $json.email, password: $json.password }) }}"
+      },
+      "name": "Supabase Auth Sign Up",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        760,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const req = $('Parse Request').first().json;\nconst root = $json || {};\n\nconst accessToken = root.access_token || root.session?.access_token || '';\nconst refreshToken = root.refresh_token || root.session?.refresh_token || '';\nconst userObj = root.user || root.session?.user || {};\nconst userId = userObj.id || '';\nconst email = userObj.email || req.email || '';\n\nif (!accessToken || !refreshToken || !userId) {\n  const err = root.msg || root.message || root.error_description || 'Auth failed';\n  return [{ ok: false, error: String(err) }];\n}\n\nreturn [{\n  ok: true,\n  action: req.action,\n  user_id: userId,\n  email,\n  access_token: accessToken,\n  refresh_token: refreshToken\n}];"
+      },
+      "name": "Build Auth Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        980,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "path": "lazybones-ai-auth",
+        "httpMethod": "POST",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "Auth Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -900,
+        520
+      ],
+      "webhookId": "lazybones-ai-auth"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "operation": "equal",
+              "value2": "get_user_data"
+            }
+          ]
+        }
+      },
+      "name": "If Get User Data",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        320,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "operation": "equal",
+              "value2": "save_user_data"
+            }
+          ]
+        }
+      },
+      "name": "If Save User Data",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        540,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/reports?select=*&user_id=eq.' + encodeURIComponent($json.userId) + '&order=report_date.desc&limit=' + ($json.limit || 200) }}",
+        "jsonParameters": true,
+        "options": {},
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
+          }
+        ]
+      },
+      "name": "Fetch Reports For User Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        760,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_tags?select=*&user_id=eq.' + encodeURIComponent($json.userId) + '&order=created_at.desc' }}",
+        "jsonParameters": true,
+        "options": {},
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
+          }
+        ]
+      },
+      "name": "Fetch User Tags",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        980,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_plan_items?select=*&user_id=eq.' + encodeURIComponent($json.userId) + '&order=created_at.asc' }}",
+        "jsonParameters": true,
+        "options": {},
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
+          }
+        ]
+      },
+      "name": "Fetch User Plan Items",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const req = $('Parse Request').first().json;\nfunction pick(node){\n  const arr = $(node).all().map(i=>i.json);\n  if (arr.length === 1 && Array.isArray(arr[0])) return arr[0];\n  return arr;\n}\nreturn [{ok:true, action:req.action, user_id:req.userId, reports:pick('Fetch Reports For User Data'), tags:pick('Fetch User Tags'), plan_items:pick('Fetch User Plan Items')}];"
+      },
+      "name": "Build User Data Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "DELETE",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/reports?user_id=eq.' + encodeURIComponent($json.userId) }}",
+        "jsonParameters": true,
+        "options": {},
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
+          }
+        ]
+      },
+      "name": "Delete Reports Snapshot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        760,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "DELETE",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_tags?user_id=eq.' + encodeURIComponent($json.userId) }}",
+        "jsonParameters": true,
+        "options": {},
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
+          }
+        ]
+      },
+      "name": "Delete Tags Snapshot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        980,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "DELETE",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_plan_items?user_id=eq.' + encodeURIComponent($json.userId) }}",
+        "jsonParameters": true,
+        "options": {},
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
+          }
+        ]
+      },
+      "name": "Delete Plan Items Snapshot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/reports' }}",
+        "jsonParameters": true,
+        "options": {},
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
+          },
+          {
+            "name": "Prefer",
+            "value": "return=minimal"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyParametersJson": "={{ JSON.stringify($json.reports || []) }}"
+      },
+      "name": "Insert Reports Snapshot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_tags' }}",
+        "jsonParameters": true,
+        "options": {},
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
+          },
+          {
+            "name": "Prefer",
+            "value": "return=minimal"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyParametersJson": "={{ JSON.stringify($json.tags || []) }}"
+      },
+      "name": "Insert Tags Snapshot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1640,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_plan_items' }}",
+        "jsonParameters": true,
+        "options": {},
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
+          },
+          {
+            "name": "Prefer",
+            "value": "return=minimal"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyParametersJson": "={{ JSON.stringify($json.planItems || []) }}"
+      },
+      "name": "Insert Plan Items Snapshot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1860,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const req = $('Parse Request').first().json; return [{ ok: true, action: req.action, user_id: req.userId }];"
+      },
+      "name": "Build Save User Data Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        660
       ]
     }
   ],
@@ -526,7 +974,7 @@
         ],
         [
           {
-            "node": "Build Error Message",
+            "node": "If Get User Data",
             "type": "main",
             "index": 0
           }
@@ -554,6 +1002,210 @@
           }
         ],
         []
+      ]
+    },
+    "If Auth Sign In": {
+      "main": [
+        [
+          {
+            "node": "Supabase Auth Sign In",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If Auth Sign Up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Auth Sign Up": {
+      "main": [
+        [
+          {
+            "node": "Supabase Auth Sign Up",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Auth Sign In": {
+      "main": [
+        [
+          {
+            "node": "Build Auth Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Auth Sign Up": {
+      "main": [
+        [
+          {
+            "node": "Build Auth Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Get User Data": {
+      "main": [
+        [
+          {
+            "node": "Fetch Reports For User Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If Save User Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Reports For User Data": {
+      "main": [
+        [
+          {
+            "node": "Fetch User Tags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch User Tags": {
+      "main": [
+        [
+          {
+            "node": "Fetch User Plan Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch User Plan Items": {
+      "main": [
+        [
+          {
+            "node": "Build User Data Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Save User Data": {
+      "main": [
+        [
+          {
+            "node": "Delete Reports Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If Auth Sign In",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Reports Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Delete Tags Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Tags Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Delete Plan Items Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Plan Items Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Insert Reports Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Reports Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Insert Tags Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Tags Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Insert Plan Items Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Plan Items Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Build Save User Data Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
