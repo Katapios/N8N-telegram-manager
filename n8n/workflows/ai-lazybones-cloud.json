@@ -610,8 +610,8 @@
     {
       "parameters": {
         "requestMethod": "DELETE",
-        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/reports?user_id=eq.' + encodeURIComponent($json.userId) }}",
-        "jsonParameters": true,
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/reports?user_id=eq.' + ($('Parse Request').first().json.userId || '') }}",
+        "jsonParameters": false,
         "options": {},
         "headerParameters": [
           {
@@ -635,8 +635,8 @@
     {
       "parameters": {
         "requestMethod": "DELETE",
-        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_tags?user_id=eq.' + encodeURIComponent($json.userId) }}",
-        "jsonParameters": true,
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_tags?user_id=eq.' + ($('Parse Request').first().json.userId || '') }}",
+        "jsonParameters": false,
         "options": {},
         "headerParameters": [
           {
@@ -660,8 +660,8 @@
     {
       "parameters": {
         "requestMethod": "DELETE",
-        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_plan_items?user_id=eq.' + encodeURIComponent($json.userId) }}",
-        "jsonParameters": true,
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_plan_items?user_id=eq.' + ($('Parse Request').first().json.userId || '') }}",
+        "jsonParameters": false,
         "options": {},
         "headerParameters": [
           {
@@ -706,7 +706,7 @@
             "value": "application/json"
           }
         ],
-        "bodyParametersJson": "={{ JSON.stringify($json.reports || []) }}"
+        "bodyParametersJson": "={{ JSON.stringify($('Parse Request').first().json.reports || []) }}"
       },
       "name": "Insert Reports Snapshot",
       "type": "n8n-nodes-base.httpRequest",
@@ -740,7 +740,7 @@
             "value": "application/json"
           }
         ],
-        "bodyParametersJson": "={{ JSON.stringify($json.tags || []) }}"
+        "bodyParametersJson": "={{ JSON.stringify($('Parse Request').first().json.tags || []) }}"
       },
       "name": "Insert Tags Snapshot",
       "type": "n8n-nodes-base.httpRequest",
@@ -774,7 +774,7 @@
             "value": "application/json"
           }
         ],
-        "bodyParametersJson": "={{ JSON.stringify($json.planItems || []) }}"
+        "bodyParametersJson": "={{ JSON.stringify($('Parse Request').first().json.planItems || []) }}"
       },
       "name": "Insert Plan Items Snapshot",
       "type": "n8n-nodes-base.httpRequest",
