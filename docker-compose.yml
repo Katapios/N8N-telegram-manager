@@ -151,7 +151,7 @@ services:
         until pg_isready -h supabase-db -p 5432 -U "$${SUPABASE_DB_USER}" -d "$${SUPABASE_DB_NAME}"; do
           sleep 2
         done
-        psql "$$DB_URL" -v ON_ERROR_STOP=1 -v db_pass="$${SUPABASE_DB_PASSWORD}" <<'SQL'
+        psql "$$DB_URL" -v ON_ERROR_STOP=1 -v db_pass="$${SUPABASE_DB_PASSWORD}" -v db_name="$${SUPABASE_DB_NAME}" <<'SQL'
         create extension if not exists pgcrypto;
         create extension if not exists vector;
 
@@ -178,6 +178,11 @@ services:
         select format('alter role supabase_storage_admin with password %L', :'db_pass') \gexec
         select format('alter role supabase_admin with password %L', :'db_pass') \gexec
         select format('alter role dashboard_user with password %L', :'db_pass') \gexec
+
+        select format(
+          'grant connect, temporary on database %I to supabase_storage_admin, supabase_auth_admin, authenticator, supabase_admin, dashboard_user',
+          :'db_name'
+        ) \gexec
 
         grant anon, authenticated, service_role to authenticator;
 
