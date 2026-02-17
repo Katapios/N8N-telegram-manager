@@ -356,7 +356,7 @@ services:
       - SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-replace-with-actual-service-role-jwt}
       - POSTGREST_URL=http://supabase-rest:3000
       - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-replace-with-very-long-random-jwt-secret-at-least-32-chars}
-      - DATABASE_URL=postgres://supabase_storage_admin:${SUPABASE_DB_PASSWORD:-change-me-strong-password}@supabase-db:5432/${SUPABASE_DB_NAME:-postgres}
+      - DATABASE_URL=postgres://${SUPABASE_DB_USER:-postgres}:${SUPABASE_DB_PASSWORD:-change-me-strong-password}@supabase-db:5432/${SUPABASE_DB_NAME:-postgres}
       - FILE_SIZE_LIMIT=${SUPABASE_STORAGE_FILE_SIZE_LIMIT:-52428800}
       - STORAGE_BACKEND=file
       - FILE_STORAGE_BACKEND_PATH=/var/lib/storage
