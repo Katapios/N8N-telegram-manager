@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   traefik:
     image: "traefik:v2.10"
@@ -462,6 +460,7 @@ services:
       - SUPABASE_PUBLIC_URL=${SUPABASE_PUBLIC_URL:-http://localhost:8000}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-replace-with-actual-anon-jwt}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-replace-with-actual-service-role-jwt}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-replace-with-actual-service-role-jwt}
       - LOGFLARE_API_KEY=${SUPABASE_LOGFLARE_API_KEY:-}
       - LOGFLARE_URL=${SUPABASE_LOGFLARE_URL:-}
       - NEXT_PUBLIC_ENABLE_LOGS=true
@@ -469,6 +468,12 @@ services:
       - "3000:3000"
     networks:
       - ai-agent-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
 networks:
   ai-agent-net:
