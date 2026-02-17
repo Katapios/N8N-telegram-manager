@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const body = $json.body || {};\nconst headers = $json.headers || {};\nconst expectedKey = $env.LAZYBONES_WEBHOOK_KEY || '';\nconst providedKey = headers['x-api-key'] || headers['X-API-Key'] || headers['x-api_key'] || '';\n\nconst authorized = !expectedKey || providedKey === expectedKey;\n\nconst actionRaw = (body.action || '').toString().trim().toLowerCase();\nconst allowed = ['save_report', 'get_reports', 'daily_summary', 'enrich_report_for_telegram', 'auth_sign_in', 'auth_sign_up', 'save_user_data', 'get_user_data'];\nconst requestedAction = allowed.includes(actionRaw) ? actionRaw : 'unknown';\nconst action = requestedAction === 'enrich_report_for_telegram' ? 'daily_summary' : requestedAction;\n\nconst userId = (body.user_id || '').toString().trim();\nconst reportType = (body.report_type || 'daily').toString().trim();\nconst reportDate = (body.report_date || new Date().toISOString().slice(0, 10)).toString().trim();\nconst reportPayload = body.report_payload || {};\nconst chatId = body.telegram_chat_id ? String(body.telegram_chat_id).trim() : '';\nconst limit = Number(body.limit || 20);\nconst email = (body.email || '').toString().trim();\nconst password = (body.password || '').toString();\nconst reports = Array.isArray(body.reports) ? body.reports : [];\nconst tags = Array.isArray(body.tags) ? body.tags : [];\nconst planItems = Array.isArray(body.plan_items) ? body.plan_items : [];\n\nreturn [{\n  authorized,\n  action,\n  requestedAction,\n  userId,\n  reportType,\n  reportDate,\n  reportPayload,\n  chatId,\n  limit: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 500) : 200,\n  hasUserId: userId.length > 0,\n  email,\n  password,\n  reports,\n  tags,\n  planItems,\n  error: authorized ? '' : 'Unauthorized: invalid x-api-key'\n}];"
+        "functionCode": "const body = $json.body || {};\nconst headers = $json.headers || {};\nconst expectedKey = $env.LAZYBONES_WEBHOOK_KEY || '';\nconst providedKey = headers['x-api-key'] || headers['X-API-Key'] || headers['x-api_key'] || '';\n\nconst authorized = !expectedKey || providedKey === expectedKey;\n\nconst actionRaw = (body.action || '').toString().trim().toLowerCase();\nconst allowed = ['save_report', 'get_reports', 'daily_summary', 'enrich_report_for_telegram', 'auth_sign_in', 'auth_sign_up', 'save_user_data', 'get_user_data'];\nconst requestedAction = allowed.includes(actionRaw) ? actionRaw : 'unknown';\nconst action = requestedAction;\n\nconst userId = (body.user_id || '').toString().trim();\nconst reportType = (body.report_type || 'daily').toString().trim();\nconst reportDate = (body.report_date || new Date().toISOString().slice(0, 10)).toString().trim();\nconst reportPayload = body.report_payload || {};\nconst chatId = body.telegram_chat_id ? String(body.telegram_chat_id).trim() : '';\nconst limit = Number(body.limit || 20);\nconst email = (body.email || '').toString().trim();\nconst password = (body.password || '').toString();\nconst reports = Array.isArray(body.reports) ? body.reports : [];\nconst tags = Array.isArray(body.tags) ? body.tags : [];\nconst planItems = Array.isArray(body.plan_items) ? body.plan_items : [];\n\nreturn [{\n  authorized,\n  action,\n  requestedAction,\n  userId,\n  reportType,\n  reportDate,\n  reportPayload,\n  chatId,\n  limit: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 500) : 200,\n  hasUserId: userId.length > 0,\n  email,\n  password,\n  reports,\n  tags,\n  planItems,\n  error: authorized ? '' : 'Unauthorized: invalid x-api-key'\n}];"
       },
       "name": "Parse Request",
       "type": "n8n-nodes-base.function",
@@ -145,7 +145,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const r = $('Parse Request').first().json;\nconst payload = r.reportPayload || {};\n\nconst system = 'Ты ассистент продуктивности. Сформируй короткий полезный вывод по отчету пользователя на русском языке. Стиль: конкретно, по делу, без воды. Добавь 2-4 рекомендации и 1 следующий шаг.';\n\nconst prompt = `Пользователь: ${r.userId}\\nДата отчета: ${r.reportDate}\\nТип: ${r.reportType}\\nДанные отчета (JSON):\\n${JSON.stringify(payload, null, 2)}\\n\\nСформируй краткий вывод и рекомендации.`;\n\nreturn [{\n  ...r,\n  system,\n  prompt\n}];"
+        "functionCode": "const r = $('Parse Request').first().json;\nconst payload = r.reportPayload || {};\n\nlet historyRaw = [];\ntry {\n  const h = $('Fetch Reports For Save Summary').first()?.json;\n  if (Array.isArray(h)) historyRaw = h;\n  else if (Array.isArray(h?.data)) historyRaw = h.data;\n  else historyRaw = [];\n} catch (_) {\n  historyRaw = [];\n}\n\nconst history = historyRaw\n  .filter(x => x && typeof x === 'object')\n  .slice(0, 30);\n\nconst system = 'Ты аналитик продуктивности. Дай структурированный и практичный вывод на русском. Формат строго: 1) Итог дня (2-4 пункта), 2) Прогресс за период (3-6 пунктов), 3) Риски/просадки (2-4 пункта), 4) Рекомендации (3-5 действий), 5) Следующий шаг (1 конкретное действие на завтра). Без воды.';\n\nconst prompt = [\n  'Пользователь: ' + r.userId,\n  'Дата отчета: ' + r.reportDate,\n  'Тип: ' + r.reportType,\n  '',\n  'ТЕКУЩИЙ ОТЧЕТ (JSON):',\n  JSON.stringify(payload, null, 2),\n  '',\n  'ПРЕДЫДУЩИЕ ОТЧЕТЫ ПОЛЬЗОВАТЕЛЯ (до 30, JSON):',\n  JSON.stringify(history, null, 2),\n  '',\n  'Нужно: дополнить публикацию отчета в Telegram аналитикой по текущему дню и динамике за период с практичными рекомендациями.'\n].join('\\n');\n\nreturn [{\n  ...r,\n  system,\n  prompt,\n  reportsCount: history.length,\n  reports: history\n}];"
       },
       "name": "Build Save Summary Prompt",
       "type": "n8n-nodes-base.function",
@@ -870,6 +870,85 @@
         2320,
         700
       ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/reports?select=id,user_id,report_date,report_type,payload,created_at&user_id=eq.' + encodeURIComponent($json.userId) + '&order=report_date.desc&limit=30' }}",
+        "jsonParameters": true,
+        "options": {
+          "ignoreResponseCode": true
+        },
+        "headerParameters": [
+          {
+            "name": "apikey",
+            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
+          },
+          {
+            "name": "Authorization",
+            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
+          }
+        ]
+      },
+      "name": "Fetch Reports For Save Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        120,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "operation": "equal",
+              "value2": "enrich_report_for_telegram"
+            }
+          ]
+        }
+      },
+      "name": "If Enrich Report",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        80,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "operation": "equal",
+              "value2": "enrich_report_for_telegram"
+            }
+          ]
+        }
+      },
+      "name": "If Enrich Requested",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        980,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const req = $('Parse Request').first().json;\nreturn [{\n  ok: true,\n  action: req.action,\n  user_id: req.userId,\n  summary: $json.summary || '',\n  reports_count: Number($json.reportsCount || 0)\n}];"
+      },
+      "name": "Build Enrich Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        120
+      ]
     }
   ],
   "connections": {
@@ -924,7 +1003,7 @@
         ],
         [
           {
-            "node": "If Daily Summary",
+            "node": "If Enrich Report",
             "type": "main",
             "index": 0
           }
@@ -935,7 +1014,7 @@
       "main": [
         [
           {
-            "node": "Build Save Summary Prompt",
+            "node": "Fetch Reports For Save Summary",
             "type": "main",
             "index": 0
           }
@@ -1008,7 +1087,7 @@
       "main": [
         [
           {
-            "node": "Save Insight",
+            "node": "If Enrich Requested",
             "type": "main",
             "index": 0
           }
@@ -1310,6 +1389,53 @@
         [
           {
             "node": "Build Save User Data Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Reports For Save Summary": {
+      "main": [
+        [
+          {
+            "node": "Build Save Summary Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Enrich Report": {
+      "main": [
+        [
+          {
+            "node": "Fetch Reports For Save Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If Daily Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Enrich Requested": {
+      "main": [
+        [
+          {
+            "node": "Build Enrich Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Insight",
             "type": "main",
             "index": 0
           }
