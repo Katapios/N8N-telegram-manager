@@ -523,7 +523,7 @@
     {
       "parameters": {
         "requestMethod": "GET",
-        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/reports?select=*&user_id=eq.' + encodeURIComponent($json.userId) + '&order=report_date.desc&limit=' + ($json.limit || 200) }}",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/reports?select=*&user_id=eq.' + encodeURIComponent($('Parse Request').first().json.userId || '') + '&order=report_date.desc&limit=' + (($('Parse Request').first().json.limit || 200)) }}",
         "jsonParameters": true,
         "options": {},
         "headerParameters": [
@@ -548,7 +548,7 @@
     {
       "parameters": {
         "requestMethod": "GET",
-        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_tags?select=*&user_id=eq.' + encodeURIComponent($json.userId) + '&order=created_at.desc' }}",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_tags?select=*&user_id=eq.' + encodeURIComponent($('Parse Request').first().json.userId || '') + '&order=created_at.desc' }}",
         "jsonParameters": true,
         "options": {},
         "headerParameters": [
@@ -573,7 +573,7 @@
     {
       "parameters": {
         "requestMethod": "GET",
-        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_plan_items?select=*&user_id=eq.' + encodeURIComponent($json.userId) + '&order=created_at.asc' }}",
+        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_plan_items?select=*&user_id=eq.' + encodeURIComponent($('Parse Request').first().json.userId || '') + '&order=created_at.asc' }}",
         "jsonParameters": true,
         "options": {},
         "headerParameters": [
