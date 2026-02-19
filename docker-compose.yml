@@ -111,6 +111,10 @@ services:
     image: pgvector/pgvector:pg15
     container_name: supabase-db
     restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
     environment:
       - POSTGRES_DB=${SUPABASE_DB_NAME:-postgres}
       - POSTGRES_USER=${SUPABASE_DB_USER:-postgres}
@@ -256,6 +260,92 @@ services:
 
         create index if not exists user_plan_items_user_created_idx
           on public.user_plan_items (user_id, created_at asc);
+
+        -- Enable RLS on public tables exposed via PostgREST.
+        alter table public.reports enable row level security;
+        alter table public.report_insights enable row level security;
+        alter table public.user_tags enable row level security;
+        alter table public.user_plan_items enable row level security;
+
+        -- Ensure service_role has full access (useful for admin workflows).
+        do $$
+        begin
+          if not exists (
+            select 1 from pg_policies
+            where schemaname = 'public' and tablename = 'reports' and policyname = 'service_role_full_access'
+          ) then
+            create policy service_role_full_access on public.reports
+              for all to service_role
+              using (true) with check (true);
+          end if;
+
+          if not exists (
+            select 1 from pg_policies
+            where schemaname = 'public' and tablename = 'report_insights' and policyname = 'service_role_full_access'
+          ) then
+            create policy service_role_full_access on public.report_insights
+              for all to service_role
+              using (true) with check (true);
+          end if;
+
+          if not exists (
+            select 1 from pg_policies
+            where schemaname = 'public' and tablename = 'user_tags' and policyname = 'service_role_full_access'
+          ) then
+            create policy service_role_full_access on public.user_tags
+              for all to service_role
+              using (true) with check (true);
+          end if;
+
+          if not exists (
+            select 1 from pg_policies
+            where schemaname = 'public' and tablename = 'user_plan_items' and policyname = 'service_role_full_access'
+          ) then
+            create policy service_role_full_access on public.user_plan_items
+              for all to service_role
+              using (true) with check (true);
+          end if;
+        end $$;
+
+        -- Optional: allow authenticated users to read rows.
+        do $$
+        begin
+          if not exists (
+            select 1 from pg_policies
+            where schemaname = 'public' and tablename = 'reports' and policyname = 'authenticated_read'
+          ) then
+            create policy authenticated_read on public.reports
+              for select to authenticated
+              using (true);
+          end if;
+
+          if not exists (
+            select 1 from pg_policies
+            where schemaname = 'public' and tablename = 'report_insights' and policyname = 'authenticated_read'
+          ) then
+            create policy authenticated_read on public.report_insights
+              for select to authenticated
+              using (true);
+          end if;
+
+          if not exists (
+            select 1 from pg_policies
+            where schemaname = 'public' and tablename = 'user_tags' and policyname = 'authenticated_read'
+          ) then
+            create policy authenticated_read on public.user_tags
+              for select to authenticated
+              using (true);
+          end if;
+
+          if not exists (
+            select 1 from pg_policies
+            where schemaname = 'public' and tablename = 'user_plan_items' and policyname = 'authenticated_read'
+          ) then
+            create policy authenticated_read on public.user_plan_items
+              for select to authenticated
+              using (true);
+          end if;
+        end $$;
 
         grant select, insert, update, delete on public.reports to anon, authenticated, service_role;
         grant select, insert, update, delete on public.report_insights to anon, authenticated, service_role;
