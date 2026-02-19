@@ -268,7 +268,7 @@ services:
         alter table public.user_plan_items enable row level security;
 
         -- Ensure service_role has full access (useful for admin workflows).
-        do $$
+        do $$$$
         begin
           if not exists (
             select 1 from pg_policies
@@ -305,10 +305,10 @@ services:
               for all to service_role
               using (true) with check (true);
           end if;
-        end $$;
+        end $$$$;
 
         -- Optional: allow authenticated users to read rows.
-        do $$
+        do $$$$
         begin
           if not exists (
             select 1 from pg_policies
@@ -345,7 +345,7 @@ services:
               for select to authenticated
               using (true);
           end if;
-        end $$;
+        end $$$$;
 
         grant select, insert, update, delete on public.reports to anon, authenticated, service_role;
         grant select, insert, update, delete on public.report_insights to anon, authenticated, service_role;
