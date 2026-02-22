@@ -177,6 +177,9 @@ services:
         select 'create role dashboard_user login noinherit'
         where not exists (select 1 from pg_roles where rolname = 'dashboard_user') \gexec
 
+        -- Ensure role attributes are applied even when roles already exist.
+        alter role supabase_admin bypassrls;
+
         select format('alter role authenticator with password %L', :'db_pass') \gexec
         select format('alter role supabase_auth_admin with password %L', :'db_pass') \gexec
         select format('alter role supabase_storage_admin with password %L', :'db_pass') \gexec
