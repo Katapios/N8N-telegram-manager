@@ -172,7 +172,7 @@ services:
         where not exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') \gexec
         select 'create role supabase_storage_admin login noinherit createrole'
         where not exists (select 1 from pg_roles where rolname = 'supabase_storage_admin') \gexec
-        select 'create role supabase_admin login noinherit createrole createdb'
+        select 'create role supabase_admin login noinherit createrole createdb bypassrls'
         where not exists (select 1 from pg_roles where rolname = 'supabase_admin') \gexec
         select 'create role dashboard_user login noinherit'
         where not exists (select 1 from pg_roles where rolname = 'dashboard_user') \gexec
