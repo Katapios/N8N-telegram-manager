@@ -211,6 +211,7 @@ services:
         grant usage on schema graphql_public to anon, authenticated, service_role;
 
         grant usage, create on schema public to dashboard_user;
+        grant usage, create on schema public to supabase_admin;
         alter default privileges in schema public grant all on tables to dashboard_user;
         alter default privileges in schema public grant all on sequences to dashboard_user;
         alter default privileges in schema public grant all on functions to dashboard_user;
