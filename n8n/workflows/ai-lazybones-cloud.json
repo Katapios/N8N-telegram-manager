@@ -684,33 +684,12 @@
     },
     {
       "parameters": {
-        "requestMethod": "POST",
-        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/reports' }}",
-        "jsonParameters": true,
-        "options": {},
-        "headerParameters": [
-          {
-            "name": "apikey",
-            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
-          },
-          {
-            "name": "Authorization",
-            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
-          },
-          {
-            "name": "Prefer",
-            "value": "return=representation"
-          },
-          {
-            "name": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "bodyParametersJson": "={{ JSON.stringify($('Parse Request').first().json.reports || []) }}"
+        "mode": "runOnceForAllItems",
+        "jsCode": "const url = ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/reports';\nconst key = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\nconst payload = (($('Parse Request').first().json.reports || []));\nconst options = {\n  method: 'POST',\n  url,\n  headers: {\n    apikey: key,\n    Authorization: 'Bearer ' + key,\n    Prefer: 'return=representation',\n    'Content-Type': 'application/json',\n  },\n  body: payload,\n  json: true,\n};\nconst res = await this.helpers.httpRequest(options);\nreturn [{ json: { result: res } }];"
       },
       "name": "Insert Reports Snapshot",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         1420,
         660
@@ -718,33 +697,12 @@
     },
     {
       "parameters": {
-        "requestMethod": "POST",
-        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_tags' }}",
-        "jsonParameters": true,
-        "options": {},
-        "headerParameters": [
-          {
-            "name": "apikey",
-            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
-          },
-          {
-            "name": "Authorization",
-            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
-          },
-          {
-            "name": "Prefer",
-            "value": "return=representation"
-          },
-          {
-            "name": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "bodyParametersJson": "={{ JSON.stringify($('Parse Request').first().json.tags || []) }}"
+        "mode": "runOnceForAllItems",
+        "jsCode": "const url = ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_tags';\nconst key = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\nconst payload = (($('Parse Request').first().json.tags || []));\nconst options = {\n  method: 'POST',\n  url,\n  headers: {\n    apikey: key,\n    Authorization: 'Bearer ' + key,\n    Prefer: 'return=representation',\n    'Content-Type': 'application/json',\n  },\n  body: payload,\n  json: true,\n};\nconst res = await this.helpers.httpRequest(options);\nreturn [{ json: { result: res } }];"
       },
       "name": "Insert Tags Snapshot",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         1640,
         660
@@ -752,33 +710,12 @@
     },
     {
       "parameters": {
-        "requestMethod": "POST",
-        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_plan_items' }}",
-        "jsonParameters": true,
-        "options": {},
-        "headerParameters": [
-          {
-            "name": "apikey",
-            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
-          },
-          {
-            "name": "Authorization",
-            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
-          },
-          {
-            "name": "Prefer",
-            "value": "return=representation"
-          },
-          {
-            "name": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "bodyParametersJson": "={{ JSON.stringify($('Parse Request').first().json.planItems || []) }}"
+        "mode": "runOnceForAllItems",
+        "jsCode": "const url = ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_plan_items';\nconst key = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\nconst payload = (($('Parse Request').first().json.planItems || []));\nconst options = {\n  method: 'POST',\n  url,\n  headers: {\n    apikey: key,\n    Authorization: 'Bearer ' + key,\n    Prefer: 'return=representation',\n    'Content-Type': 'application/json',\n  },\n  body: payload,\n  json: true,\n};\nconst res = await this.helpers.httpRequest(options);\nreturn [{ json: { result: res } }];"
       },
       "name": "Insert Plan Items Snapshot",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         1860,
         660
