@@ -522,24 +522,12 @@
     },
     {
       "parameters": {
-        "requestMethod": "GET",
-        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/reports?select=*&user_id=eq.' + encodeURIComponent($('Parse Request').first().json.userId || '') + '&order=report_date.desc&limit=' + (($('Parse Request').first().json.limit || 200)) }}",
-        "jsonParameters": true,
-        "options": {},
-        "headerParameters": [
-          {
-            "name": "apikey",
-            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
-          },
-          {
-            "name": "Authorization",
-            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
-          }
-        ]
+        "mode": "runOnceForAllItems",
+        "jsCode": "const base = ($env.SUPABASE_URL || 'http://supabase-kong:8000');\nconst key = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\nconst url = base + `/rest/v1/reports?select=*&user_id=eq.${encodeURIComponent($('Parse Request').first().json.userId || '')}&order=report_date.desc&limit=${($('Parse Request').first().json.limit || 200)}`;\nconst options = {\n  method: 'GET',\n  url,\n  headers: {\n    apikey: key,\n    Authorization: 'Bearer ' + key,\n  },\n  json: true,\n};\nconst res = await this.helpers.httpRequest(options);\nconst arr = Array.isArray(res) ? res : (res ? [res] : []);\nreturn arr.map(item => ({ json: item }));"
       },
       "name": "Fetch Reports For User Data",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         760,
         500
@@ -547,24 +535,12 @@
     },
     {
       "parameters": {
-        "requestMethod": "GET",
-        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_tags?select=*&user_id=eq.' + encodeURIComponent($('Parse Request').first().json.userId || '') + '&order=created_at.desc' }}",
-        "jsonParameters": true,
-        "options": {},
-        "headerParameters": [
-          {
-            "name": "apikey",
-            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
-          },
-          {
-            "name": "Authorization",
-            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
-          }
-        ]
+        "mode": "runOnceForAllItems",
+        "jsCode": "const base = ($env.SUPABASE_URL || 'http://supabase-kong:8000');\nconst key = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\nconst url = base + `/rest/v1/user_tags?select=*&user_id=eq.${encodeURIComponent($('Parse Request').first().json.userId || '')}&order=created_at.desc`;\nconst options = {\n  method: 'GET',\n  url,\n  headers: {\n    apikey: key,\n    Authorization: 'Bearer ' + key,\n  },\n  json: true,\n};\nconst res = await this.helpers.httpRequest(options);\nconst arr = Array.isArray(res) ? res : (res ? [res] : []);\nreturn arr.map(item => ({ json: item }));"
       },
       "name": "Fetch User Tags",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         980,
         500
@@ -572,24 +548,12 @@
     },
     {
       "parameters": {
-        "requestMethod": "GET",
-        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_plan_items?select=*&user_id=eq.' + encodeURIComponent($('Parse Request').first().json.userId || '') + '&order=created_at.asc' }}",
-        "jsonParameters": true,
-        "options": {},
-        "headerParameters": [
-          {
-            "name": "apikey",
-            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
-          },
-          {
-            "name": "Authorization",
-            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
-          }
-        ]
+        "mode": "runOnceForAllItems",
+        "jsCode": "const base = ($env.SUPABASE_URL || 'http://supabase-kong:8000');\nconst key = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\nconst url = base + `/rest/v1/user_plan_items?select=*&user_id=eq.${encodeURIComponent($('Parse Request').first().json.userId || '')}&order=created_at.asc`;\nconst options = {\n  method: 'GET',\n  url,\n  headers: {\n    apikey: key,\n    Authorization: 'Bearer ' + key,\n  },\n  json: true,\n};\nconst res = await this.helpers.httpRequest(options);\nconst arr = Array.isArray(res) ? res : (res ? [res] : []);\nreturn arr.map(item => ({ json: item }));"
       },
       "name": "Fetch User Plan Items",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         1200,
         500
@@ -735,24 +699,12 @@
     },
     {
       "parameters": {
-        "requestMethod": "GET",
-        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/reports?select=id&user_id=eq.' + encodeURIComponent($('Parse Request').first().json.userId || '') }}",
-        "jsonParameters": true,
-        "options": {},
-        "headerParameters": [
-          {
-            "name": "apikey",
-            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
-          },
-          {
-            "name": "Authorization",
-            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
-          }
-        ]
+        "mode": "runOnceForAllItems",
+        "jsCode": "const base = ($env.SUPABASE_URL || 'http://supabase-kong:8000');\nconst key = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\nconst url = base + `/rest/v1/reports?select=id&user_id=eq.${encodeURIComponent($('Parse Request').first().json.userId || '')}`;\nconst options = {\n  method: 'GET',\n  url,\n  headers: {\n    apikey: key,\n    Authorization: 'Bearer ' + key,\n  },\n  json: true,\n};\nconst res = await this.helpers.httpRequest(options);\nconst arr = Array.isArray(res) ? res : (res ? [res] : []);\nreturn arr.map(item => ({ json: item }));"
       },
       "name": "Fetch Saved Reports",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         1880,
         700
@@ -760,24 +712,12 @@
     },
     {
       "parameters": {
-        "requestMethod": "GET",
-        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_tags?select=id&user_id=eq.' + encodeURIComponent($('Parse Request').first().json.userId || '') }}",
-        "jsonParameters": true,
-        "options": {},
-        "headerParameters": [
-          {
-            "name": "apikey",
-            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
-          },
-          {
-            "name": "Authorization",
-            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
-          }
-        ]
+        "mode": "runOnceForAllItems",
+        "jsCode": "const base = ($env.SUPABASE_URL || 'http://supabase-kong:8000');\nconst key = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\nconst url = base + `/rest/v1/user_tags?select=id&user_id=eq.${encodeURIComponent($('Parse Request').first().json.userId || '')}`;\nconst options = {\n  method: 'GET',\n  url,\n  headers: {\n    apikey: key,\n    Authorization: 'Bearer ' + key,\n  },\n  json: true,\n};\nconst res = await this.helpers.httpRequest(options);\nconst arr = Array.isArray(res) ? res : (res ? [res] : []);\nreturn arr.map(item => ({ json: item }));"
       },
       "name": "Fetch Saved Tags",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         2100,
         700
@@ -785,24 +725,12 @@
     },
     {
       "parameters": {
-        "requestMethod": "GET",
-        "url": "={{ ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_plan_items?select=id&user_id=eq.' + encodeURIComponent($('Parse Request').first().json.userId || '') }}",
-        "jsonParameters": true,
-        "options": {},
-        "headerParameters": [
-          {
-            "name": "apikey",
-            "value": "={{ (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim() }}"
-          },
-          {
-            "name": "Authorization",
-            "value": "={{ 'Bearer ' + ((($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim()) }}"
-          }
-        ]
+        "mode": "runOnceForAllItems",
+        "jsCode": "const base = ($env.SUPABASE_URL || 'http://supabase-kong:8000');\nconst key = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\nconst url = base + `/rest/v1/user_plan_items?select=id&user_id=eq.${encodeURIComponent($('Parse Request').first().json.userId || '')}`;\nconst options = {\n  method: 'GET',\n  url,\n  headers: {\n    apikey: key,\n    Authorization: 'Bearer ' + key,\n  },\n  json: true,\n};\nconst res = await this.helpers.httpRequest(options);\nconst arr = Array.isArray(res) ? res : (res ? [res] : []);\nreturn arr.map(item => ({ json: item }));"
       },
       "name": "Fetch Saved Plan Items",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         2320,
         700
