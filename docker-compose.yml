@@ -209,6 +209,9 @@ services:
         grant usage, create on schema realtime to supabase_admin;
         grant usage on schema public to supabase_auth_admin, supabase_storage_admin, supabase_admin;
 
+        grant usage on schema auth to supabase_admin, dashboard_user;
+        grant select on all tables in schema auth to supabase_admin, dashboard_user;
+
         grant usage on schema public to anon, authenticated, service_role;
         grant usage on schema storage to anon, authenticated, service_role;
         grant usage on schema graphql_public to anon, authenticated, service_role;
