@@ -203,7 +203,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const text = $json.data || '';\nconst maxChunk = Number($env.OLLAMA_EMBEDDING_MAX_CHARS) || 2048;\nconst preferredChunk = Math.min(1000, maxChunk);\nconst chunks = [];\nconst paragraphs = text.split(/\\n\\s*\\n/);\nlet currentChunk = '';\nfor (const pRaw of paragraphs) {\n  const p = pRaw.trim();\n  if (!p) continue;\n  if (p.length > maxChunk) {\n    if (currentChunk) {\n      chunks.push(currentChunk.trim());\n      currentChunk = '';\n    }\n    for (let i = 0; i < p.length; i += maxChunk) {\n      chunks.push(p.slice(i, i + maxChunk));\n    }\n    continue;\n  }\n  const separator = currentChunk ? '\\n\\n' : '';\n  if ((currentChunk + separator + p).length > preferredChunk) {\n    if (currentChunk) chunks.push(currentChunk.trim());\n    currentChunk = p;\n  } else {\n    currentChunk += separator + p;\n  }\n}\nif (currentChunk) chunks.push(currentChunk.trim());\nif (chunks.length === 0 && text.length > 0) {\n  for (let i = 0; i < text.length; i += maxChunk) {\n    chunks.push(text.slice(i, i + maxChunk));\n  }\n}\nconst safeChunks = chunks.map((chunk) => chunk.slice(0, maxChunk)).filter((chunk) => chunk.length > 0);\nreturn safeChunks.map((chunk, index) => ({\n  chunk,\n  chunkIndex: index,\n  totalChunks: safeChunks.length,\n  fileName: $node[\"Parse Telegram\"].json.document.file_name,\n  chatId: $node[\"Parse Telegram\"].json.chatId\n}));"
+        "functionCode": "const text = $json.data || '';\nconst maxChunk = Number($env.OLLAMA_EMBEDDING_MAX_CHARS) || 2048;\nconst preferredChunk = Math.min(1000, maxChunk);\nconst chunks = [];\nconst paragraphs = text.split(/\\n\\s*\\n/);\nlet currentChunk = '';\nfor (const pRaw of paragraphs) {\n  const p = pRaw.trim();\n  if (!p) continue;\n  if (p.length > maxChunk) {\n    if (currentChunk) {\n      chunks.push(currentChunk.trim());\n      currentChunk = '';\n    }\n    for (let i = 0; i < p.length; i += maxChunk) {\n      chunks.push(p.slice(i, i + maxChunk));\n    }\n    continue;\n  }\n  const separator = currentChunk ? '\\n\\n' : '';\n  if ((currentChunk + separator + p).length > preferredChunk) {\n    if (currentChunk) chunks.push(currentChunk.trim());\n    currentChunk = p;\n  } else {\n    currentChunk += separator + p;\n  }\n}\nif (currentChunk) chunks.push(currentChunk.trim());\nif (chunks.length === 0 && text.length > 0) {\n  for (let i = 0; i < text.length; i += maxChunk) {\n    chunks.push(text.slice(i, i + maxChunk));\n  }\n}\nconst safeChunks = chunks.map((chunk) => chunk.slice(0, maxChunk)).filter((chunk) => chunk.length > 0);\n\nconst overlap = Math.min(200, Math.floor(preferredChunk * 0.2));\nconst overlapped = [];\nfor (let i = 0; i < safeChunks.length; i++) {\n  const cur = safeChunks[i];\n  if (i === 0 || overlap <= 0) {\n    overlapped.push(cur);\n    continue;\n  }\n  const prev = safeChunks[i - 1];\n  const prefix = prev.slice(-overlap);\n  let merged = (prefix + '\\n' + cur);\n  if (merged.length > maxChunk) {\n    merged = merged.slice(merged.length - maxChunk);\n  }\n  overlapped.push(merged);\n}\nreturn overlapped.map((chunk, index) => ({\n  chunk,\n  chunkIndex: index,\n  totalChunks: overlapped.length,\n  fileName: $node[\"Parse Telegram\"].json.document.file_name,\n  chatId: $node[\"Parse Telegram\"].json.chatId\n}));"
       },
       "name": "Split Text",
       "type": "n8n-nodes-base.function",
@@ -276,7 +276,7 @@
         "url": "={{ 'http://chroma:8000/api/v1/collections/' + $('Merge Collection ID').first().json.collectionId + '/upsert' }}",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"ids\": [ $('Parse Telegram').first().json.document.file_id + '_' + $json.chunkIndex ],\n  \"embeddings\": [ $json.embedding ],\n  \"documents\": [ $json.chunk ],\n  \"metadatas\": [ { \"source\": \"file\", \"filename\": $json.fileName } ]\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"ids\": [ $('Parse Telegram').first().json.document.file_id + \"_\" + $json.chunkIndex ],\n  \"embeddings\": [ $json.embedding ],\n  \"documents\": [ $json.chunk ],\n  \"metadatas\": [ { \"source\": \"file\", \"filename\": $json.fileName, \"chatId\": $json.chatId } ]\n}) }}"
       },
       "name": "Upsert Chunk",
       "type": "n8n-nodes-base.httpRequest",
@@ -378,7 +378,7 @@
         "url": "={{ 'http://chroma:8000/api/v1/collections/' + $json.collectionId + '/query' }}",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({ \"query_embeddings\": [ $json.embedding ], \"n_results\": 5 }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ \"query_embeddings\": [ $json.embedding ], \"n_results\": 10, \"where\": { \"chatId\": $json.chatId } }) }}"
       },
       "name": "Chroma Query",
       "type": "n8n-nodes-base.httpRequest",
@@ -432,7 +432,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const system = 'Ты русскоязычный AI-ассистент в Telegram. Твоя задача - давать точные, полезные и структурированные ответы.\\n\\nИнструкции:\\n1. Используй контекст из памяти (Memory) и веб-поиска (Web) для полноты ответа\\n2. Проверяй факты по предоставленному контексту\\n3. Указывай источники в формате [1], [2] при использовании контекста\\n4. Если контекста недостаточно, используй свои знания, но укажи это\\n5. Отвечай кратко, но полно\\n6. Форматируй ответ для удобства чтения (используй списки, абзацы)\\n7. Если вопрос неясен, уточни что именно нужно';\n\nconst parts = [];\nif ($json.memoryContext && $json.memoryContext.trim()) {\n  parts.push('Memory context (из прошлых разговоров и документов):\\n' + $json.memoryContext.trim());\n}\nif ($json.webContext && $json.webContext.trim()) {\n  parts.push('Web search context (актуальная информация из интернета):\\n' + $json.webContext.trim());\n}\n\nconst MAX_CTX = Number($env.OLLAMA_PROMPT_MAX_CHARS) || 8000;\nlet context = parts.join('\\n\\n');\nif (context.length > MAX_CTX) {\n  context = context.slice(0, MAX_CTX) + '... [контекст обрезан]';\n}\n\nlet content = '';\nif (context) {\n  content = '<<CONTEXT_START>>\\n' + context + '\\n<<CONTEXT_END>>\\n\\nВопрос: ' + ($json.query || 'Без вопроса') + '\\nОтвет:';\n} else {\n  content = 'Вопрос: ' + ($json.query || 'Без вопроса') + '\\nОтвет:';\n}\n\nif (!$json.chatId) {\n  throw new Error('Отсутствует chatId');\n}\n\nreturn [{ chatId: $json.chatId, prompt: content, system, query: $json.query || '' }];"
+        "functionCode": "const system = 'Ты русскоязычный AI-ассистент в Telegram. Твоя задача - давать точные, полезные и структурированные ответы.\\n\\nИнструкции:\\n1. Используй контекст из памяти (Memory) и веб-поиска (Web) для полноты ответа\\n2. Проверяй факты по предоставленному контексту\\n3. Указывай источники в формате [1], [2] при использовании контекста\\n4. Если контекста недостаточно, используй свои знания, но укажи это\\n5. Отвечай развернуто и по делу, с примерами и шагами\\n6. Форматируй ответ для удобства чтения (используй списки, абзацы)\\n7. Если вопрос неясен, уточни что именно нужно';\n\nconst parts = [];\nif ($json.memoryContext && $json.memoryContext.trim()) {\n  parts.push('Memory context (из прошлых разговоров и документов):\\n' + $json.memoryContext.trim());\n}\nif ($json.webContext && $json.webContext.trim()) {\n  parts.push('Web search context (актуальная информация из интернета):\\n' + $json.webContext.trim());\n}\n\nconst MAX_CTX = Number($env.OLLAMA_PROMPT_MAX_CHARS) || 12000;\nlet context = parts.join('\\n\\n');\nif (context.length > MAX_CTX) {\n  context = context.slice(0, MAX_CTX) + '... [контекст обрезан]';\n}\n\nlet content = '';\nif (context) {\n  content = '<<CONTEXT_START>>\\n' + context + '\\n<<CONTEXT_END>>\\n\\nВопрос: ' + ($json.query || 'Без вопроса') + '\\nОтвет:';\n} else {\n  content = 'Вопрос: ' + ($json.query || 'Без вопроса') + '\\nОтвет:';\n}\n\nif (!$json.chatId) {\n  throw new Error('Отсутствует chatId');\n}\n\nreturn [{ chatId: $json.chatId, prompt: content, system, query: $json.query || '' }];"
       },
       "name": "Build Prompt",
       "type": "n8n-nodes-base.function",
@@ -519,7 +519,7 @@
         "url": "={{ 'http://chroma:8000/api/v1/collections/' + $json.collectionId + '/upsert' }}",
         "jsonParameters": true,
         "options": {},
-        "bodyParametersJson": "={{ JSON.stringify({\n  \"ids\": [ Date.now().toString() ],\n  \"embeddings\": [ $json.embedding ],\n  \"documents\": [ $json.question + \"\\n\\n\" + $json.answer ],\n  \"metadatas\": [ { \"source\": \"telegram\" } ]\n}) }}"
+        "bodyParametersJson": "={{ JSON.stringify({\n  \"ids\": [ Date.now().toString() ],\n  \"embeddings\": [ $json.embedding ],\n  \"documents\": [ $json.question + \"\\n\\n\" + $json.answer ],\n  \"metadatas\": [ { \"source\": \"telegram\", \"chatId\": $json.chatId } ]\n}) }}"
       },
       "name": "Chroma Upsert",
       "type": "n8n-nodes-base.httpRequest",
