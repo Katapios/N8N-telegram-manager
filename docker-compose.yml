@@ -248,6 +248,8 @@ services:
           on public.reports (user_id, report_date desc);
         create index if not exists reports_type_idx
           on public.reports (report_type);
+        create unique index if not exists reports_user_date_type_uniq
+          on public.reports (user_id, report_date, report_type);
 
         create table if not exists public.report_insights (
           id uuid primary key default gen_random_uuid(),
@@ -272,6 +274,8 @@ services:
 
         create index if not exists user_tags_user_created_idx
           on public.user_tags (user_id, created_at desc);
+        create unique index if not exists user_tags_user_text_uniq
+          on public.user_tags (user_id, tag_text);
 
         create table if not exists public.user_plan_items (
           id uuid primary key default gen_random_uuid(),
@@ -283,6 +287,8 @@ services:
 
         create index if not exists user_plan_items_user_created_idx
           on public.user_plan_items (user_id, created_at asc);
+        create unique index if not exists user_plan_items_user_text_uniq
+          on public.user_plan_items (user_id, item_text);
 
         -- Enable RLS on public tables exposed via PostgREST.
         alter table public.reports enable row level security;

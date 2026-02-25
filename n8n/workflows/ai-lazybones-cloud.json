@@ -145,7 +145,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const r = $('Parse Request').first().json;\nconst payload = r.reportPayload || {};\n\nlet historyRaw = [];\ntry {\n  const h = $('Fetch Reports For Save Summary').first()?.json;\n  if (Array.isArray(h)) historyRaw = h;\n  else if (Array.isArray(h?.data)) historyRaw = h.data;\n  else historyRaw = [];\n} catch (_) {\n  historyRaw = [];\n}\n\nconst history = historyRaw\n  .filter(x => x && typeof x === 'object')\n  .slice(0, 30);\n\nconst system = 'Ты аналитик продуктивности. Дай структурированный и практичный вывод на русском. Формат строго: 1) Итог дня (2-4 пункта), 2) Прогресс за период (3-6 пунктов), 3) Риски/просадки (2-4 пункта), 4) Рекомендации (3-5 действий), 5) Следующий шаг (1 конкретное действие на завтра). Без воды.';\n\nconst prompt = [\n  'Пользователь: ' + r.userId,\n  'Дата отчета: ' + r.reportDate,\n  'Тип: ' + r.reportType,\n  '',\n  'ТЕКУЩИЙ ОТЧЕТ (JSON):',\n  JSON.stringify(payload, null, 2),\n  '',\n  'ПРЕДЫДУЩИЕ ОТЧЕТЫ ПОЛЬЗОВАТЕЛЯ (до 30, JSON):',\n  JSON.stringify(history, null, 2),\n  '',\n  'Нужно: дополнить публикацию отчета в Telegram аналитикой по текущему дню и динамике за период с практичными рекомендациями.'\n].join('\\n');\n\nreturn [{\n  ...r,\n  system,\n  prompt,\n  reportsCount: history.length,\n  reports: history\n}];"
+        "functionCode": "const r = $('Parse Request').first().json;\nconst payload = r.reportPayload || {};\n\nconst sourceReports = Array.isArray(r.reports) && r.reports.length > 0 ? r.reports : null;\n\n\nlet historyRaw = [];\ntry {\n  const h = $('Fetch Reports For Save Summary').first()?.json;\n  if (Array.isArray(h)) historyRaw = h;\n  else if (Array.isArray(h?.data)) historyRaw = h.data;\n  else historyRaw = [];\n} catch (_) {\n  historyRaw = [];\n}\n\nconst history = historyRaw\n  .filter(x => x && typeof x === 'object')\n  .slice(0, 30);\n\nconst system = 'Ты аналитик продуктивности. Дай структурированный и практичный вывод на русском. Формат строго: 1) Итог дня (2-4 пункта), 2) Прогресс за период (3-6 пунктов), 3) Риски/просадки (2-4 пункта), 4) Рекомендации (3-5 действий), 5) Следующий шаг (1 конкретное действие на завтра). Без воды.';\n\nconst prompt = [\n  'Пользователь: ' + r.userId,\n  'Дата отчета: ' + r.reportDate,\n  'Тип: ' + r.reportType,\n  '',\n  'ТЕКУЩИЙ ОТЧЕТ (JSON):',\n  JSON.stringify(sourceReports || payload, null, 2),\n  '',\n  'ПРЕДЫДУЩИЕ ОТЧЕТЫ ПОЛЬЗОВАТЕЛЯ (до 30, JSON):',\n  JSON.stringify(history, null, 2),\n  '',\n  'Нужно: дополнить публикацию отчета в Telegram аналитикой по текущему дню и динамике за период с практичными рекомендациями.'\n].join('\\n');\n\nreturn [{\n  ...r,\n  system,\n  prompt,\n  reportsCount: history.length,\n  reports: history\n}];"
       },
       "name": "Build Save Summary Prompt",
       "type": "n8n-nodes-base.function",
@@ -613,7 +613,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const url = ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/reports';\nconst key = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\nconst payload = (($('Parse Request').first().json.reports || []));\nconst options = {\n  method: 'POST',\n  url,\n  headers: {\n    apikey: key,\n    Authorization: 'Bearer ' + key,\n    Prefer: 'return=representation',\n    'Content-Type': 'application/json',\n  },\n  body: payload,\n  json: true,\n};\nconst res = await this.helpers.httpRequest(options);\nreturn [{ json: { result: res } }];"
+        "jsCode": "const url = ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/reports?on_conflict=user_id,report_date,report_type';\nconst key = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\nconst payload = (($('Parse Request').first().json.reports || []));\nconst options = {\n  method: 'POST',\n  url,\n  headers: {\n    apikey: key,\n    Authorization: 'Bearer ' + key,\n    Prefer: 'resolution=merge-duplicates,return=representation',\n    'Content-Type': 'application/json',\n  },\n  body: payload,\n  json: true,\n};\nconst res = await this.helpers.httpRequest(options);\nreturn [{ json: { result: res } }];"
       },
       "name": "Insert Reports Snapshot",
       "type": "n8n-nodes-base.code",
@@ -626,7 +626,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const url = ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_tags';\nconst key = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\nconst payload = (($('Parse Request').first().json.tags || []));\nconst options = {\n  method: 'POST',\n  url,\n  headers: {\n    apikey: key,\n    Authorization: 'Bearer ' + key,\n    Prefer: 'return=representation',\n    'Content-Type': 'application/json',\n  },\n  body: payload,\n  json: true,\n};\nconst res = await this.helpers.httpRequest(options);\nreturn [{ json: { result: res } }];"
+        "jsCode": "const url = ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_tags?on_conflict=user_id,tag_text';\nconst key = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\nconst payload = (($('Parse Request').first().json.tags || []));\nconst options = {\n  method: 'POST',\n  url,\n  headers: {\n    apikey: key,\n    Authorization: 'Bearer ' + key,\n    Prefer: 'resolution=merge-duplicates,return=representation',\n    'Content-Type': 'application/json',\n  },\n  body: payload,\n  json: true,\n};\nconst res = await this.helpers.httpRequest(options);\nreturn [{ json: { result: res } }];"
       },
       "name": "Insert Tags Snapshot",
       "type": "n8n-nodes-base.code",
@@ -639,7 +639,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const url = ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_plan_items';\nconst key = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\nconst payload = (($('Parse Request').first().json.planItems || []));\nconst options = {\n  method: 'POST',\n  url,\n  headers: {\n    apikey: key,\n    Authorization: 'Bearer ' + key,\n    Prefer: 'return=representation',\n    'Content-Type': 'application/json',\n  },\n  body: payload,\n  json: true,\n};\nconst res = await this.helpers.httpRequest(options);\nreturn [{ json: { result: res } }];"
+        "jsCode": "const url = ($env.SUPABASE_URL || 'http://supabase-kong:8000') + '/rest/v1/user_plan_items?on_conflict=user_id,item_text';\nconst key = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\nconst payload = (($('Parse Request').first().json.planItems || []));\nconst options = {\n  method: 'POST',\n  url,\n  headers: {\n    apikey: key,\n    Authorization: 'Bearer ' + key,\n    Prefer: 'resolution=merge-duplicates,return=representation',\n    'Content-Type': 'application/json',\n  },\n  body: payload,\n  json: true,\n};\nconst res = await this.helpers.httpRequest(options);\nreturn [{ json: { result: res } }];"
       },
       "name": "Insert Plan Items Snapshot",
       "type": "n8n-nodes-base.code",
@@ -763,6 +763,26 @@
       "position": [
         1200,
         120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.chatId }}",
+              "operation": "isNotEmpty",
+              "value2": ""
+            }
+          ]
+        }
+      },
+      "name": "If Enrich After Save User Data",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1860,
+        660
       ]
     }
   ],
@@ -1255,6 +1275,29 @@
             "index": 0
           }
         ]
+      ]
+    },
+    "Build Save User Data Response": {
+      "main": [
+        [
+          {
+            "node": "If Enrich After Save User Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Enrich After Save User Data": {
+      "main": [
+        [
+          {
+            "node": "Fetch Reports For Save Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     }
   },
