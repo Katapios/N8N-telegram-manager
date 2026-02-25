@@ -432,7 +432,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const system = 'Ты русскоязычный AI-ассистент в Telegram. Твоя задача - давать точные, полезные и структурированные ответы.\\n\\nИнструкции:\\n1. Используй контекст из памяти (Memory) и веб-поиска (Web) для полноты ответа\\n2. Проверяй факты по предоставленному контексту\\n3. Указывай источники в формате [1], [2] при использовании контекста\\n4. Если контекста недостаточно, используй свои знания, но укажи это\\n5. Отвечай развернуто и по делу, с примерами и шагами\\n6. Форматируй ответ для удобства чтения (используй списки, абзацы)\\n7. Если вопрос неясен, уточни что именно нужно';\n\nconst parts = [];\nif ($json.memoryContext && $json.memoryContext.trim()) {\n  parts.push('Memory context (из прошлых разговоров и документов):\\n' + $json.memoryContext.trim());\n}\nif ($json.webContext && $json.webContext.trim()) {\n  parts.push('Web search context (актуальная информация из интернета):\\n' + $json.webContext.trim());\n}\n\nconst MAX_CTX = Number($env.OLLAMA_PROMPT_MAX_CHARS) || 12000;\nlet context = parts.join('\\n\\n');\nif (context.length > MAX_CTX) {\n  context = context.slice(0, MAX_CTX) + '... [контекст обрезан]';\n}\n\nlet content = '';\nif (context) {\n  content = '<<CONTEXT_START>>\\n' + context + '\\n<<CONTEXT_END>>\\n\\nВопрос: ' + ($json.query || 'Без вопроса') + '\\nОтвет:';\n} else {\n  content = 'Вопрос: ' + ($json.query || 'Без вопроса') + '\\nОтвет:';\n}\n\nif (!$json.chatId) {\n  throw new Error('Отсутствует chatId');\n}\n\nreturn [{ chatId: $json.chatId, prompt: content, system, query: $json.query || '' }];"
+        "functionCode": "const system = 'Ты русскоязычный AI-ассистент в Telegram. Твоя задача - давать точные, полезные и структурированные ответы.\\n\\nИнструкции:\\n1. Используй контекст из памяти (Memory) и веб-поиска (Web) для полноты ответа\\n2. Проверяй факты по предоставленному контексту\\n3. Указывай источники в формате [1], [2] при использовании контекста\\n4. Если контекста недостаточно, используй свои знания, но укажи это\\n5. Отвечай развернуто и по делу, с примерами и шагами\\n6. Форматируй ответ для удобства чтения (используй списки, абзацы)\\n7. Если вопрос неясен, уточни что именно нужно';\n\n\nconst history = Array.isArray($json.chatHistory) ? $json.chatHistory : [];\nlet historyText = '';\nif (history.length > 0) {\n  historyText = history.map(h => `[${h.role}] ${h.content}`).join('\\n');\n}\n\nconst parts = [];\nif (historyText) {\n  parts.push('Dialogue context (последние сообщения):\\n' + historyText);\n}\n\nif ($json.memoryContext && $json.memoryContext.trim()) {\n  parts.push('Memory context (из прошлых разговоров и документов):\\n' + $json.memoryContext.trim());\n}\nif ($json.webContext && $json.webContext.trim()) {\n  parts.push('Web search context (актуальная информация из интернета):\\n' + $json.webContext.trim());\n}\n\nconst MAX_CTX = Number($env.OLLAMA_PROMPT_MAX_CHARS) || 12000;\nlet context = parts.join('\\n\\n');\nif (context.length > MAX_CTX) {\n  context = context.slice(0, MAX_CTX) + '... [контекст обрезан]';\n}\n\nlet content = '';\nif (context) {\n  content = '<<CONTEXT_START>>\\n' + context + '\\n<<CONTEXT_END>>\\n\\nВопрос: ' + ($json.query || 'Без вопроса') + '\\nОтвет:';\n} else {\n  content = 'Вопрос: ' + ($json.query || 'Без вопроса') + '\\nОтвет:';\n}\n\nif (!$json.chatId) {\n  throw new Error('Отсутствует chatId');\n}\n\nreturn [{ chatId: $json.chatId, prompt: content, system, query: $json.query || '' }];"
       },
       "name": "Build Prompt",
       "type": "n8n-nodes-base.function",
@@ -562,6 +562,32 @@
           "name": "Telegram"
         }
       }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const input = $json;\nconst base = ($env.SUPABASE_URL || 'http://supabase-kong:8000');\nconst key = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\nconst chatId = input.chatId || ($('Parse Telegram').first().json.chatId);\nconst limit = 20;\nconst url = base + `/rest/v1/chat_memory?select=role,content,created_at&chat_id=eq.${encodeURIComponent(chatId)}&order=created_at.desc&limit=${limit}`;\nlet history = [];\ntry {\n  const res = await this.helpers.httpRequest({\n    method: 'GET',\n    url,\n    headers: { apikey: key, Authorization: 'Bearer ' + key },\n    json: true,\n  });\n  if (Array.isArray(res)) {\n    history = res.slice().reverse();\n  }\n} catch (e) {\n  // ignore if table missing or empty\n}\nreturn [{ json: { ...input, chatHistory: history } }];"
+      },
+      "name": "Fetch Chat History",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const input = $json;\nconst base = ($env.SUPABASE_URL || 'http://supabase-kong:8000');\nconst key = (($env.SUPABASE_SERVICE_ROLE_KEY || '') + '').trim();\nconst chatId = input.chatId || ($('Parse Telegram').first().json.chatId);\nconst question = input.question || input.query || '';\nconst answer = input.answer || '';\nconst rows = [\n  { chat_id: chatId, role: 'user', content: question },\n  { chat_id: chatId, role: 'assistant', content: answer },\n];\nconst url = base + '/rest/v1/chat_memory';\ntry {\n  await this.helpers.httpRequest({\n    method: 'POST',\n    url,\n    headers: { apikey: key, Authorization: 'Bearer ' + key, Prefer: 'return=minimal', 'Content-Type': 'application/json' },\n    body: rows,\n    json: true,\n  });\n} catch (e) {\n  // ignore\n}\nreturn [{ json: input }];"
+      },
+      "name": "Save Chat Memory",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        340
+      ]
     }
   ],
   "connections": {
@@ -738,7 +764,7 @@
       "main": [
         [
           {
-            "node": "Build Prompt",
+            "node": "Fetch Chat History",
             "type": "main",
             "index": 0
           }
@@ -749,7 +775,7 @@
       "main": [
         [
           {
-            "node": "Build Prompt",
+            "node": "Fetch Chat History",
             "type": "main",
             "index": 0
           }
@@ -787,7 +813,7 @@
             "index": 0
           },
           {
-            "node": "Split Long Message",
+            "node": "Save Chat Memory",
             "type": "main",
             "index": 0
           }
@@ -898,6 +924,28 @@
         [
           {
             "node": "Notify Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Chat History": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Chat Memory": {
+      "main": [
+        [
+          {
+            "node": "Split Long Message",
             "type": "main",
             "index": 0
           }

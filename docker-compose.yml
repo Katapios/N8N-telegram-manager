@@ -290,6 +290,19 @@ services:
         alter table public.user_tags enable row level security;
         alter table public.user_plan_items enable row level security;
 
+        create table if not exists public.chat_memory (
+          id uuid primary key default gen_random_uuid(),
+          chat_id text not null,
+          role text not null,
+          content text not null,
+          created_at timestamptz not null default now()
+        );
+
+        create index if not exists chat_memory_chat_id_created_idx
+          on public.chat_memory (chat_id, created_at desc);
+
+        alter table public.chat_memory enable row level security;
+
         -- Ensure service_role has full access (useful for admin workflows).
         do $$$$
         begin
@@ -325,6 +338,15 @@ services:
             where schemaname = 'public' and tablename = 'user_plan_items' and policyname = 'service_role_full_access'
           ) then
             create policy service_role_full_access on public.user_plan_items
+              for all to service_role
+              using (true) with check (true);
+          end if;
+
+          if not exists (
+            select 1 from pg_policies
+            where schemaname = 'public' and tablename = 'chat_memory' and policyname = 'service_role_full_access'
+          ) then
+            create policy service_role_full_access on public.chat_memory
               for all to service_role
               using (true) with check (true);
           end if;
@@ -374,6 +396,7 @@ services:
         grant select, insert, update, delete on public.report_insights to anon, authenticated, service_role;
         grant select, insert, update, delete on public.user_tags to anon, authenticated, service_role;
         grant select, insert, update, delete on public.user_plan_items to anon, authenticated, service_role;
+        grant select, insert, update, delete on public.chat_memory to anon, authenticated, service_role;
         SQL
     networks:
       - ai-agent-net
