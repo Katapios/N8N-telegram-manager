@@ -9,6 +9,7 @@ n8n/data/
 ollama/data/
 vector-store/data/
 reverse-proxy/letsencrypt/
+supabase/db/
 
 # --- Файлы операционной системы и IDE ---
 .DS_Store
