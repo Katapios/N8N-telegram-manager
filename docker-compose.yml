@@ -473,6 +473,7 @@ services:
       - SECRET_KEY_BASE=${SUPABASE_SECRET_KEY_BASE:-replace-with-long-random-secret-key-base}
       - ERL_AFLAGS=-proto_dist inet_tcp
       - SEED_SELF_HOST=true
+      - DB_ENC_KEY=${SUPABASE_DB_ENC_KEY} 
     networks:
       - ai-agent-net
 
