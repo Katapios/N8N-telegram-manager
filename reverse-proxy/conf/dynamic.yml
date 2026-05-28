@@ -2,7 +2,7 @@ http:
   routers:
     n8n-router:
       # Домен должен совпадать с N8N_HOST из .env
-      rule: "Host(`llm.ognivo.spb.ru`)"
+      rule: "Host(`katapios.com`)"
       entryPoints:
         - "websecure"
       service: "n8n-service"
