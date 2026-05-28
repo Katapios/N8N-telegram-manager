@@ -1,0 +1,53 @@
+{
+  "name": "Album Cover Catalog to Excel",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "album-cover-catalog",
+        "httpMethod": "POST",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        220
+      ],
+      "webhookId": "album-cover-catalog"
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "http://cover-cataloger:8080/run",
+        "jsonParameters": true,
+        "options": {
+          "timeout": 1800000
+        },
+        "bodyParametersJson": "{}"
+      },
+      "name": "Build Excel Catalog",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -140,
+        220
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build Excel Catalog",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}

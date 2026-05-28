@@ -69,6 +69,36 @@ services:
           cpus: '1.0'
           memory: '1.5G'
 
+  cover-cataloger:
+    image: python:3.12-alpine
+    container_name: cover-cataloger
+    restart: unless-stopped
+    working_dir: /app
+    command: ["python", "/app/server.py"]
+    environment:
+      - COVER_CATALOG_INPUT_DIR=/data/covers
+      - COVER_CATALOG_OUTPUT_DIR=/data/reports
+      - COVER_CATALOG_MAX_FILES=${COVER_CATALOG_MAX_FILES:-500}
+      - COVER_CATALOG_SEARCH_DELAY_SECONDS=${COVER_CATALOG_SEARCH_DELAY_SECONDS:-0.8}
+      - COVER_CATALOG_USER_AGENT=${COVER_CATALOG_USER_AGENT:-LazyBonesCoverCataloger/1.0 (local)}
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - OLLAMA_VISION_MODEL=${OLLAMA_VISION_MODEL}
+      - COVER_CATALOG_VISION_MAX_IMAGE_BYTES=${COVER_CATALOG_VISION_MAX_IMAGE_BYTES:-8000000}
+    volumes:
+      - ./cover-cataloger:/app:ro
+      - ./media-covers:/data/covers:ro
+      - ./reports:/data/reports
+    networks:
+      - ai-agent-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
 
   ollama:
     image: ollama/ollama

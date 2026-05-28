@@ -117,6 +117,28 @@
 - Установите модель в `OLLAMA_MODEL` (например, `llama3.2:3b`).
 - В workflow HTTP-запросы к Ollama автоматически используют указанный базовый URL и добавляют заголовок авторизации при наличии ключа.
 
+### Каталогизация обложек музыкальных дисков в Excel
+
+Новый workflow `n8n/workflows/album-cover-catalog.xlsx.json` запускает отдельный сервис `cover-cataloger`, который сканирует папку с изображениями, ищет сведения о релизе и авторах обложки через MusicBrainz/Tavily, уточняет результат через Ollama и формирует Excel-файл.
+
+1. Положите изображения обложек в папку `media-covers/` в корне проекта.
+2. Убедитесь, что в `.env` заполнены `TAVILY_API_KEY`, `OLLAMA_BASE_URL`, `OLLAMA_API_KEY`, `OLLAMA_MODEL`, `OLLAMA_VISION_MODEL`.
+3. При необходимости настройте:
+   - `COVER_CATALOG_MAX_FILES` — максимальный размер партии.
+   - `COVER_CATALOG_SEARCH_DELAY_SECONDS` — задержка между внешними запросами.
+   - `COVER_CATALOG_USER_AGENT` — имя проекта и контакт для публичных metadata API.
+   - `OLLAMA_VISION_MODEL` — multimodal/vision модель, которая смотрит саму обложку.
+   - `COVER_CATALOG_VISION_MAX_IMAGE_BYTES` — максимальный размер картинки для отправки в vision-модель.
+4. Запустите/обновите контейнеры:
+   ```bash
+   docker compose up -d cover-cataloger n8n
+   ```
+5. Импортируйте workflow `n8n/workflows/album-cover-catalog.xlsx.json` в n8n и активируйте его.
+6. Запустите workflow POST-запросом на webhook `/webhook/album-cover-catalog`.
+7. Готовый `.xlsx` и дополнительный `.json` появятся в папке `reports/`.
+
+Если файл называется только по исполнителю, например `elvis presley.jpg`, сервис сначала попробует распознать название альбома по самой картинке через `OLLAMA_VISION_MODEL`, а затем найдет недостающие credits через MusicBrainz/Tavily.
+
 ## Модели для Ollama (локальный режим)
 
 Для корректной работы RAG и диалоговой части в локальном Docker‑инстансе Ollama необходимо заранее загрузить модели:
