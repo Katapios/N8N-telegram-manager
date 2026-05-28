@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import re
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -26,6 +27,8 @@ OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "").strip()
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b").strip()
 OLLAMA_VISION_MODEL = os.getenv("OLLAMA_VISION_MODEL", "").strip()
 VISION_MAX_IMAGE_BYTES = int(os.getenv("COVER_CATALOG_VISION_MAX_IMAGE_BYTES", "8000000"))
+JOBS_LOCK = threading.Lock()
+JOBS: dict[str, dict[str, Any]] = {}
 
 
 def http_json(
@@ -353,12 +356,19 @@ def write_xlsx(rows: list[dict[str, Any]], output_path: Path) -> None:
         zf.writestr("xl/worksheets/sheet1.xml", worksheet)
 
 
-def build_catalog() -> dict[str, Any]:
+def build_catalog(job_id: str | None = None) -> dict[str, Any]:
     started = dt.datetime.now(dt.timezone.utc)
-    run_id = started.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
+    run_id = job_id or started.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
     images = find_images()
     rows = []
     for index, path in enumerate(images, start=1):
+        if job_id:
+            update_job(job_id, {
+                "status": "running",
+                "current": index,
+                "total": len(images),
+                "current_file": str(path.relative_to(INPUT_DIR)),
+            })
         filename_hints = parse_filename(path)
         vision = identify_from_cover(path, filename_hints)
         hints = enrich_hints_with_vision(filename_hints, vision)
@@ -391,6 +401,53 @@ def build_catalog() -> dict[str, Any]:
     }
 
 
+def update_job(job_id: str, patch: dict[str, Any]) -> None:
+    with JOBS_LOCK:
+        current = JOBS.get(job_id, {})
+        current.update(patch)
+        current["updated_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+        JOBS[job_id] = current
+
+
+def run_job(job_id: str) -> None:
+    try:
+        update_job(job_id, {"status": "running"})
+        result = build_catalog(job_id)
+        update_job(job_id, {"status": "completed", "result": result})
+    except Exception as exc:
+        update_job(job_id, {"status": "failed", "error": str(exc), "type": exc.__class__.__name__})
+
+
+def start_background_job() -> dict[str, Any]:
+    with JOBS_LOCK:
+        for existing_id, job in JOBS.items():
+            if job.get("status") in {"queued", "running"}:
+                return {
+                    "ok": False,
+                    "error": "A catalog job is already running.",
+                    "job_id": existing_id,
+                    "status": job,
+                }
+        job_id = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
+        JOBS[job_id] = {
+            "job_id": job_id,
+            "status": "queued",
+            "current": 0,
+            "total": None,
+            "current_file": "",
+            "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "updated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        }
+    thread = threading.Thread(target=run_job, args=(job_id,), daemon=True)
+    thread.start()
+    return {
+        "ok": True,
+        "job_id": job_id,
+        "status_url": f"/status/{job_id}",
+        "message": "Catalog job started. The Excel file will be written to the reports folder when the job completes.",
+    }
+
+
 class Handler(BaseHTTPRequestHandler):
     def send_json(self, status: int, body: dict[str, Any]) -> None:
         payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
@@ -404,9 +461,26 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/health":
             self.send_json(200, {"ok": True, "service": "cover-cataloger"})
             return
+        if self.path == "/status":
+            with JOBS_LOCK:
+                self.send_json(200, {"ok": True, "jobs": JOBS})
+            return
+        if self.path.startswith("/status/"):
+            job_id = self.path.rsplit("/", 1)[-1]
+            with JOBS_LOCK:
+                job = JOBS.get(job_id)
+            if not job:
+                self.send_json(404, {"ok": False, "error": "Job not found", "job_id": job_id})
+                return
+            self.send_json(200, {"ok": True, "job": job})
+            return
         self.send_json(404, {"ok": False, "error": "Not found"})
 
     def do_POST(self) -> None:
+        if self.path == "/start":
+            result = start_background_job()
+            self.send_json(202 if result.get("ok") else 409, result)
+            return
         if self.path != "/run":
             self.send_json(404, {"ok": False, "error": "Not found"})
             return

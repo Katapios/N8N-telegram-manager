@@ -134,8 +134,12 @@
    docker compose up -d cover-cataloger n8n
    ```
 5. Импортируйте workflow `n8n/workflows/album-cover-catalog.xlsx.json` в n8n и активируйте его.
-6. Запустите workflow POST-запросом на webhook `/webhook/album-cover-catalog`.
-7. Готовый `.xlsx` и дополнительный `.json` появятся в папке `reports/`.
+6. Запустите workflow POST-запросом на webhook `/webhook/album-cover-catalog`. Workflow сразу вернет `job_id`, а обработка продолжится в фоне.
+7. Проверяйте прогресс внутри контейнера:
+   ```bash
+   docker exec cover-cataloger python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/status').read().decode())"
+   ```
+8. Готовый `.xlsx` и дополнительный `.json` появятся в папке `reports/`.
 
 Если файл называется только по исполнителю, например `elvis presley.jpg`, сервис сначала попробует распознать название альбома по самой картинке через `OLLAMA_VISION_MODEL`, а затем найдет недостающие credits через MusicBrainz/Tavily.
 
