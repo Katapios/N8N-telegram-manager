@@ -5,6 +5,7 @@ import os
 import re
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -27,8 +28,15 @@ OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "").strip()
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b").strip()
 OLLAMA_VISION_MODEL = os.getenv("OLLAMA_VISION_MODEL", "").strip()
 VISION_MAX_IMAGE_BYTES = int(os.getenv("COVER_CATALOG_VISION_MAX_IMAGE_BYTES", "8000000"))
+VISION_TIMEOUT_SECONDS = int(os.getenv("COVER_CATALOG_VISION_TIMEOUT_SECONDS", "900"))
+LLM_TIMEOUT_SECONDS = int(os.getenv("COVER_CATALOG_LLM_TIMEOUT_SECONDS", "300"))
+DISCOGS_TOKEN = os.getenv("DISCOGS_TOKEN", "").strip()
 JOBS_LOCK = threading.Lock()
 JOBS: dict[str, dict[str, Any]] = {}
+
+
+def log(message: str) -> None:
+    print(f"[{dt.datetime.now(dt.timezone.utc).isoformat()}] {message}", flush=True)
 
 
 def http_json(
@@ -50,6 +58,17 @@ def http_json(
     with urllib.request.urlopen(request, timeout=timeout) as response:
         raw = response.read().decode("utf-8", errors="replace")
         return json.loads(raw) if raw else {}
+
+
+def compact_error(exc: Exception) -> str:
+    if isinstance(exc, urllib.error.HTTPError):
+        body = ""
+        try:
+            body = exc.read().decode("utf-8", errors="replace")[:500]
+        except Exception:
+            body = ""
+        return f"HTTPError {exc.code}: {body}".strip()
+    return f"{exc.__class__.__name__}: {exc}"
 
 
 def find_images() -> list[Path]:
@@ -127,12 +146,12 @@ def identify_from_cover(path: Path, hints: dict[str, str]) -> dict[str, Any]:
     }
     headers = {"Authorization": f"Bearer {OLLAMA_API_KEY}"} if OLLAMA_API_KEY else {}
     try:
-        data = http_json(f"{OLLAMA_BASE_URL}/api/chat", payload=payload, headers=headers, timeout=180)
+        data = http_json(f"{OLLAMA_BASE_URL}/api/chat", payload=payload, headers=headers, timeout=VISION_TIMEOUT_SECONDS)
         content = data.get("message", {}).get("content", "")
         match = re.search(r"\{.*\}", content, flags=re.S)
         parsed = json.loads(match.group(0) if match else content)
     except Exception as exc:
-        return {"album_title": "", "performer_artist": hints["artist_hint"], "visible_text": "", "confidence": 0, "notes": f"Vision extraction failed: {exc.__class__.__name__}"}
+        return {"album_title": "", "performer_artist": hints["artist_hint"], "visible_text": "", "confidence": 0, "notes": f"Vision extraction failed: {compact_error(exc)}"}
 
     return {
         "album_title": str(parsed.get("album_title", "") or ""),
@@ -174,14 +193,72 @@ def musicbrainz_search(hints: dict[str, str]) -> list[dict[str, Any]]:
         artist_name = "".join(str(a.get("name", "")) for a in artists if isinstance(a, dict)).strip()
         release_id = release.get("id", "")
         result.append({
+            "id": release_id,
             "title": release.get("title", ""),
             "artist": artist_name,
             "date": release.get("date", ""),
             "country": release.get("country", ""),
             "score": release.get("score", ""),
+            "labels": [
+                str(label.get("label", {}).get("name", ""))
+                for label in release.get("label-info", [])
+                if isinstance(label, dict) and label.get("label")
+            ],
             "source": f"https://musicbrainz.org/release/{release_id}" if release_id else "",
         })
     return result
+
+
+def musicbrainz_release_details(release_id: str) -> dict[str, Any]:
+    if not release_id:
+        return {}
+    params = urllib.parse.urlencode({
+        "fmt": "json",
+        "inc": "artist-credits+labels+url-rels+artist-rels",
+    })
+    url = f"https://musicbrainz.org/ws/2/release/{urllib.parse.quote(release_id)}?{params}"
+    try:
+        data = http_json(url, timeout=30)
+    except Exception as exc:
+        return {"error": compact_error(exc)}
+
+    labels = []
+    for item in data.get("label-info", []) or []:
+        label = item.get("label") if isinstance(item, dict) else None
+        if label and label.get("name"):
+            labels.append(label["name"])
+
+    relations = []
+    external_urls = []
+    for rel in data.get("relations", []) or []:
+        rel_type = str(rel.get("type", "") or "")
+        target = rel.get("artist") or rel.get("url") or {}
+        target_name = str(target.get("name") or target.get("resource") or "")
+        if target_name:
+            relations.append({"type": rel_type, "target": target_name})
+        if rel.get("url", {}).get("resource"):
+            external_urls.append(rel["url"]["resource"])
+
+    return {
+        "id": release_id,
+        "title": data.get("title", ""),
+        "date": data.get("date", ""),
+        "labels": labels,
+        "relations": relations[:40],
+        "external_urls": external_urls[:20],
+        "source": f"https://musicbrainz.org/release/{release_id}",
+    }
+
+
+def musicbrainz_enrich(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    enriched = []
+    for candidate in candidates[:3]:
+        details = musicbrainz_release_details(str(candidate.get("id", "")))
+        merged = {**candidate, "details": details}
+        enriched.append(merged)
+        if SEARCH_DELAY:
+            time.sleep(SEARCH_DELAY)
+    return enriched
 
 
 def tavily_search(hints: dict[str, str]) -> list[dict[str, str]]:
@@ -195,7 +272,7 @@ def tavily_search(hints: dict[str, str]) -> list[dict[str, str]]:
         "search_depth": "advanced",
         "max_results": 6,
         "include_answer": True,
-        "include_raw_content": False,
+        "include_raw_content": True,
     }
     try:
         data = http_json("https://api.tavily.com/search", payload=payload, timeout=60)
@@ -210,11 +287,113 @@ def tavily_search(hints: dict[str, str]) -> list[dict[str, str]]:
             "title": str(item.get("title", ""))[:200],
             "url": str(item.get("url", ""))[:500],
             "content": str(item.get("content", ""))[:1500],
+            "raw_content": str(item.get("raw_content", ""))[:2500],
         })
     return compact
 
 
-def ollama_extract(path: Path, hints: dict[str, str], vision: dict[str, Any], mb: list[dict[str, Any]], web: list[dict[str, str]]) -> dict[str, Any]:
+def discogs_search(hints: dict[str, str]) -> list[dict[str, Any]]:
+    if not DISCOGS_TOKEN:
+        return []
+    query = f'{hints["artist_hint"]} {hints["title_hint"]}'.strip() or hints["filename_hint"]
+    params = urllib.parse.urlencode({
+        "q": query,
+        "type": "release",
+        "per_page": "3",
+        "page": "1",
+        "token": DISCOGS_TOKEN,
+    })
+    try:
+        data = http_json(f"https://api.discogs.com/database/search?{params}", timeout=45)
+    except Exception as exc:
+        return [{"error": compact_error(exc)}]
+
+    results = []
+    for item in data.get("results", [])[:3]:
+        resource_url = str(item.get("resource_url", ""))
+        detail = {}
+        if resource_url:
+            detail_params = urllib.parse.urlencode({"token": DISCOGS_TOKEN})
+            sep = "&" if "?" in resource_url else "?"
+            try:
+                detail = http_json(f"{resource_url}{sep}{detail_params}", timeout=45)
+            except Exception as exc:
+                detail = {"error": compact_error(exc)}
+            if SEARCH_DELAY:
+                time.sleep(SEARCH_DELAY)
+        results.append(compact_discogs_release(item, detail))
+    return results
+
+
+def compact_discogs_release(search_item: dict[str, Any], detail: dict[str, Any]) -> dict[str, Any]:
+    extraartists = []
+    for item in detail.get("extraartists", []) or []:
+        if not isinstance(item, dict):
+            continue
+        extraartists.append({
+            "name": str(item.get("name", "")),
+            "role": str(item.get("role", "")),
+        })
+    labels = []
+    for label in detail.get("labels", []) or []:
+        if isinstance(label, dict) and label.get("name"):
+            labels.append(str(label["name"]))
+    companies = []
+    for company in detail.get("companies", []) or []:
+        if isinstance(company, dict):
+            companies.append({
+                "name": str(company.get("name", "")),
+                "entity_type_name": str(company.get("entity_type_name", "")),
+            })
+    return {
+        "title": detail.get("title") or search_item.get("title", ""),
+        "year": detail.get("year") or search_item.get("year", ""),
+        "labels": labels,
+        "extraartists": extraartists[:60],
+        "companies": companies[:30],
+        "source": detail.get("uri") or search_item.get("uri") or "",
+        "resource_url": search_item.get("resource_url", ""),
+        "error": detail.get("error", ""),
+    }
+
+
+def collect_source_urls(mb: list[dict[str, Any]], web: list[dict[str, str]], discogs: list[dict[str, Any]]) -> list[str]:
+    urls = []
+    for item in mb:
+        if item.get("source"):
+            urls.append(str(item["source"]))
+        details = item.get("details") or {}
+        if details.get("source"):
+            urls.append(str(details["source"]))
+        for url in details.get("external_urls", []) or []:
+            urls.append(str(url))
+    for item in web:
+        if item.get("url"):
+            urls.append(str(item["url"]))
+    for item in discogs:
+        if item.get("source"):
+            urls.append(str(item["source"]))
+        if item.get("resource_url"):
+            urls.append(str(item["resource_url"]))
+    deduped = []
+    seen = set()
+    for url in urls:
+        url = url.strip()
+        if url and url not in seen:
+            seen.add(url)
+            deduped.append(url)
+    return deduped[:20]
+
+
+def ollama_extract(
+    path: Path,
+    hints: dict[str, str],
+    vision: dict[str, Any],
+    mb: list[dict[str, Any]],
+    web: list[dict[str, str]],
+    discogs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    source_urls = collect_source_urls(mb, web, discogs)
     fallback = {
         "file_name": path.name,
         "relative_path": str(path.relative_to(INPUT_DIR)),
@@ -226,7 +405,7 @@ def ollama_extract(path: Path, hints: dict[str, str], vision: dict[str, Any], mb
         "illustrator_or_artist": "",
         "release_year": "",
         "label": "",
-        "source_urls": [],
+        "source_urls": source_urls,
         "confidence": vision.get("confidence", 0.25 if hints["title_hint"] else 0.0),
         "notes": "Fallback without LLM extraction.",
     }
@@ -242,8 +421,11 @@ def ollama_extract(path: Path, hints: dict[str, str], vision: dict[str, Any], mb
                 "role": "system",
                 "content": (
                     "You catalog music album covers. Return only strict JSON. "
-                    "Use evidence from the supplied search results. If a field is not supported, use an empty string. "
-                    "Do not invent credits."
+                    "Use only evidence from supplied MusicBrainz, Discogs and web search data. "
+                    "For cover_designer, photographer, illustrator_or_artist and producer, prefer Discogs extraartists roles "
+                    "such as Design, Designed By, Artwork, Art Direction, Photography, Illustration, Producer. "
+                    "If a field is not supported, use an empty string. Do not invent credits. "
+                    "Always include relevant supplied source URLs."
                 ),
             },
             {
@@ -253,7 +435,9 @@ def ollama_extract(path: Path, hints: dict[str, str], vision: dict[str, Any], mb
                     "filename_hints": hints,
                     "vision_cover_identification": vision,
                     "musicbrainz_candidates": mb,
+                    "discogs_candidates": discogs,
                     "web_search_results": web,
+                    "known_source_urls": source_urls,
                     "required_json_schema": {
                         "album_title": "string",
                         "performer_artist": "string",
@@ -273,19 +457,26 @@ def ollama_extract(path: Path, hints: dict[str, str], vision: dict[str, Any], mb
     }
     headers = {"Authorization": f"Bearer {OLLAMA_API_KEY}"} if OLLAMA_API_KEY else {}
     try:
-        data = http_json(f"{OLLAMA_BASE_URL}/api/chat", payload=payload, headers=headers, timeout=120)
+        data = http_json(f"{OLLAMA_BASE_URL}/api/chat", payload=payload, headers=headers, timeout=LLM_TIMEOUT_SECONDS)
         content = data.get("message", {}).get("content", "")
         match = re.search(r"\{.*\}", content, flags=re.S)
         parsed = json.loads(match.group(0) if match else content)
     except Exception as exc:
-        fallback["notes"] = f"LLM extraction failed: {exc.__class__.__name__}"
+        fallback["notes"] = f"LLM extraction failed: {compact_error(exc)}"
         return fallback
 
     fallback.update({k: parsed.get(k, fallback.get(k, "")) for k in fallback if k in parsed})
     fallback["file_name"] = path.name
     fallback["relative_path"] = str(path.relative_to(INPUT_DIR))
     if not isinstance(fallback.get("source_urls"), list):
-        fallback["source_urls"] = []
+        fallback["source_urls"] = source_urls
+    else:
+        fallback["source_urls"] = collect_source_urls(
+            [{"source": url} for url in fallback["source_urls"]],
+            [],
+            [],
+        ) + [url for url in source_urls if url not in fallback["source_urls"]]
+        fallback["source_urls"] = fallback["source_urls"][:20]
     return fallback
 
 
@@ -356,7 +547,7 @@ def write_xlsx(rows: list[dict[str, Any]], output_path: Path) -> None:
         zf.writestr("xl/worksheets/sheet1.xml", worksheet)
 
 
-def build_catalog(job_id: str | None = None) -> dict[str, Any]:
+def build_catalog(job_id: Optional[str] = None) -> dict[str, Any]:
     started = dt.datetime.now(dt.timezone.utc)
     run_id = job_id or started.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
     images = find_images()
@@ -365,27 +556,56 @@ def build_catalog(job_id: str | None = None) -> dict[str, Any]:
         if job_id:
             update_job(job_id, {
                 "status": "running",
+                "stage": "starting_file",
                 "current": index,
                 "total": len(images),
                 "current_file": str(path.relative_to(INPUT_DIR)),
             })
+        log(f"job={run_id} file={index}/{len(images)} start {path.relative_to(INPUT_DIR)}")
         filename_hints = parse_filename(path)
+        if job_id:
+            update_job(job_id, {"stage": "vision"})
+        log(f"job={run_id} file={index}/{len(images)} vision start")
         vision = identify_from_cover(path, filename_hints)
+        log(f"job={run_id} file={index}/{len(images)} vision done title={vision.get('album_title', '')!r} artist={vision.get('performer_artist', '')!r} notes={vision.get('notes', '')[:160]!r}")
         hints = enrich_hints_with_vision(filename_hints, vision)
+        if job_id:
+            update_job(job_id, {"stage": "musicbrainz_search"})
+        log(f"job={run_id} file={index}/{len(images)} musicbrainz search start")
         mb = musicbrainz_search(hints)
+        if job_id:
+            update_job(job_id, {"stage": "musicbrainz_details"})
+        log(f"job={run_id} file={index}/{len(images)} musicbrainz details start candidates={len(mb)}")
+        mb = musicbrainz_enrich(mb)
         if SEARCH_DELAY:
             time.sleep(SEARCH_DELAY)
+        if job_id:
+            update_job(job_id, {"stage": "discogs"})
+        log(f"job={run_id} file={index}/{len(images)} discogs start")
+        discogs = discogs_search(hints)
+        if SEARCH_DELAY:
+            time.sleep(SEARCH_DELAY)
+        if job_id:
+            update_job(job_id, {"stage": "tavily"})
+        log(f"job={run_id} file={index}/{len(images)} tavily start")
         web = tavily_search(hints)
-        row = ollama_extract(path, hints, vision, mb, web)
+        if job_id:
+            update_job(job_id, {"stage": "llm_extract"})
+        log(f"job={run_id} file={index}/{len(images)} llm_extract start sources={len(collect_source_urls(mb, web, discogs))}")
+        row = ollama_extract(path, hints, vision, mb, web, discogs)
         row["vision_visible_text"] = vision.get("visible_text", "")
         row["vision_notes"] = vision.get("notes", "")
         row["row_number"] = index
         rows.append(row)
+        log(f"job={run_id} file={index}/{len(images)} done")
         if SEARCH_DELAY and index < len(images):
             time.sleep(SEARCH_DELAY)
 
     xlsx_path = OUTPUT_DIR / f"album-cover-catalog-{run_id}.xlsx"
     json_path = OUTPUT_DIR / f"album-cover-catalog-{run_id}.json"
+    if job_id:
+        update_job(job_id, {"stage": "writing_files", "current_file": ""})
+    log(f"job={run_id} writing {xlsx_path}")
     write_xlsx(rows, xlsx_path)
     json_path.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
     return {

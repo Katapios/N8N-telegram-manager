@@ -123,12 +123,16 @@
 
 1. Положите изображения обложек в папку `media-covers/` в корне проекта.
 2. Убедитесь, что в `.env` заполнены `TAVILY_API_KEY`, `OLLAMA_BASE_URL`, `OLLAMA_API_KEY`, `OLLAMA_MODEL`, `OLLAMA_VISION_MODEL`.
+   Для более полного заполнения дизайнеров, фотографов, художников и продюсеров добавьте `DISCOGS_TOKEN`.
 3. При необходимости настройте:
    - `COVER_CATALOG_MAX_FILES` — максимальный размер партии.
    - `COVER_CATALOG_SEARCH_DELAY_SECONDS` — задержка между внешними запросами.
    - `COVER_CATALOG_USER_AGENT` — имя проекта и контакт для публичных metadata API.
    - `OLLAMA_VISION_MODEL` — multimodal/vision модель, которая смотрит саму обложку.
    - `COVER_CATALOG_VISION_MAX_IMAGE_BYTES` — максимальный размер картинки для отправки в vision-модель.
+   - `COVER_CATALOG_VISION_TIMEOUT_SECONDS` — таймаут одного vision-запроса.
+   - `COVER_CATALOG_LLM_TIMEOUT_SECONDS` — таймаут финального LLM-запроса.
+   - `DISCOGS_TOKEN` — опциональный токен Discogs API для credits по ролям `Design`, `Photography`, `Artwork`, `Producer`.
 4. Запустите/обновите контейнеры:
    ```bash
    docker compose up -d cover-cataloger n8n
@@ -142,6 +146,7 @@
 8. Готовый `.xlsx` и дополнительный `.json` появятся в папке `reports/`.
 
 Если файл называется только по исполнителю, например `elvis presley.jpg`, сервис сначала попробует распознать название альбома по самой картинке через `OLLAMA_VISION_MODEL`, а затем найдет недостающие credits через MusicBrainz/Tavily.
+Если в `.env` задан `DISCOGS_TOKEN`, workflow дополнительно проверит Discogs и передаст LLM структурированные credits из `extraartists`.
 
 ## Модели для Ollama (локальный режим)
 
