@@ -70,7 +70,8 @@ services:
           memory: '1.5G'
 
   cover-cataloger:
-    image: python:3.12-alpine
+    build:
+      context: ./cover-cataloger
     container_name: cover-cataloger
     restart: unless-stopped
     working_dir: /app

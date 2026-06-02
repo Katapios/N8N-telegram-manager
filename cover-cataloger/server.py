@@ -547,6 +547,118 @@ def write_xlsx(rows: list[dict[str, Any]], output_path: Path) -> None:
         zf.writestr("xl/worksheets/sheet1.xml", worksheet)
 
 
+def write_pdf(rows: list[dict[str, Any]], output_path: Path) -> None:
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import mm
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+        from reportlab.platypus.flowables import HRFlowable
+    except Exception as exc:
+        raise RuntimeError(f"PDF generation requires reportlab: {exc}") from exc
+
+    font_path_candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/Library/Fonts/Arial Unicode.ttf",
+    ]
+    bold_font_path_candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+        "/Library/Fonts/Arial Bold.ttf",
+    ]
+    font_path = next((p for p in font_path_candidates if Path(p).exists()), "")
+    bold_font_path = next((p for p in bold_font_path_candidates if Path(p).exists()), font_path)
+    if not font_path:
+        raise RuntimeError("PDF generation requires a Unicode TTF font such as DejaVuSans.ttf")
+
+    pdfmetrics.registerFont(TTFont("CatalogSans", font_path))
+    pdfmetrics.registerFont(TTFont("CatalogSansBold", bold_font_path))
+
+    fields = [
+        ("relative_path", "File"),
+        ("album_title", "Название диска"),
+        ("performer_artist", "Исполнитель / автор"),
+        ("cover_designer", "Дизайнер обложки"),
+        ("photographer", "Фотограф"),
+        ("illustrator_or_artist", "Художник / иллюстратор"),
+        ("producer", "Продюсер"),
+        ("release_year", "Год"),
+        ("label", "Лейбл"),
+        ("confidence", "Уверенность"),
+        ("vision_visible_text", "Текст с обложки"),
+        ("source_urls", "Источники"),
+        ("notes", "Примечания"),
+    ]
+
+    def html_escape(value: Any) -> str:
+        if isinstance(value, list):
+            value = "<br/>".join(str(v) for v in value if v)
+        text = str(value or "")
+        return (
+            text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\n", "<br/>")
+        )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    doc = SimpleDocTemplate(
+        str(output_path),
+        pagesize=A4,
+        leftMargin=14 * mm,
+        rightMargin=14 * mm,
+        topMargin=14 * mm,
+        bottomMargin=14 * mm,
+        title="Album cover catalog",
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "CatalogTitle",
+        parent=styles["Title"],
+        fontName="CatalogSansBold",
+        fontSize=15,
+        leading=18,
+        spaceAfter=8,
+    )
+    row_title_style = ParagraphStyle(
+        "RowTitle",
+        parent=styles["Normal"],
+        fontName="CatalogSansBold",
+        fontSize=10,
+        leading=13,
+        spaceBefore=7,
+        spaceAfter=3,
+    )
+    field_style = ParagraphStyle(
+        "Field",
+        parent=styles["Normal"],
+        fontName="CatalogSans",
+        fontSize=8.5,
+        leading=11,
+        spaceAfter=2,
+    )
+    story = [
+        Paragraph("Каталог обложек музыкальных дисков", title_style),
+        Paragraph(f"Строк: {len(rows)}", field_style),
+        Spacer(1, 4),
+    ]
+    for index, row in enumerate(rows, start=1):
+        title = row.get("album_title") or row.get("relative_path") or ""
+        story.append(Paragraph(f"#{index}. {html_escape(title)}", row_title_style))
+        for key, label in fields:
+            value = row.get(key, "")
+            if value in ("", None, []):
+                continue
+            story.append(Paragraph(f"<b>{html_escape(label)}:</b> {html_escape(value)}", field_style))
+        story.append(HRFlowable(width="100%", thickness=0.5, color="#999999", spaceBefore=4, spaceAfter=4))
+    doc.build(story)
+
+
 def build_catalog(job_id: Optional[str] = None) -> dict[str, Any]:
     started = dt.datetime.now(dt.timezone.utc)
     run_id = job_id or started.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
@@ -603,10 +715,13 @@ def build_catalog(job_id: Optional[str] = None) -> dict[str, Any]:
 
     xlsx_path = OUTPUT_DIR / f"album-cover-catalog-{run_id}.xlsx"
     json_path = OUTPUT_DIR / f"album-cover-catalog-{run_id}.json"
+    pdf_path = OUTPUT_DIR / f"album-cover-catalog-{run_id}.pdf"
     if job_id:
         update_job(job_id, {"stage": "writing_files", "current_file": ""})
     log(f"job={run_id} writing {xlsx_path}")
     write_xlsx(rows, xlsx_path)
+    log(f"job={run_id} writing {pdf_path}")
+    write_pdf(rows, pdf_path)
     json_path.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
     return {
         "ok": True,
@@ -615,6 +730,7 @@ def build_catalog(job_id: Optional[str] = None) -> dict[str, Any]:
         "output_dir": str(OUTPUT_DIR),
         "image_count": len(images),
         "xlsx_path": str(xlsx_path),
+        "pdf_path": str(pdf_path),
         "json_path": str(json_path),
         "started_at": started.isoformat(),
         "finished_at": dt.datetime.now(dt.timezone.utc).isoformat(),

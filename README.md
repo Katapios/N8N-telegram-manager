@@ -143,7 +143,9 @@
    ```bash
    docker exec cover-cataloger python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/status').read().decode())"
    ```
-8. Готовый `.xlsx` и дополнительный `.json` появятся в папке `reports/`.
+8. Готовые `.xlsx`, `.pdf` и дополнительный `.json` появятся в папке `reports/`.
+
+PDF формируется построчно с Unicode-шрифтом, чтобы русский текст, названия и источники можно было копировать без замены символов на `?`.
 
 Если файл называется только по исполнителю, например `elvis presley.jpg`, сервис сначала попробует распознать название альбома по самой картинке через `OLLAMA_VISION_MODEL`, а затем найдет недостающие credits через MusicBrainz/Tavily.
 Если в `.env` задан `DISCOGS_TOKEN`, workflow дополнительно проверит Discogs и передаст LLM структурированные credits из `extraartists`.
